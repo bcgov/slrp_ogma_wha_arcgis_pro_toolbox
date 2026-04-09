@@ -520,7 +520,7 @@ def section_2_check_change_attribute_fields():
     arcpy.SelectLayerByAttribute_management('fc_lyr', "SUBSET_SELECTION", "(\"RETIREMENT_DATE\" is not null OR \"RETIREMENT_GIS_CHANGE_PERSON\" is not null OR \"RETIREMENT_REASON\" is not null OR \"RETIREMENT_INITIATOR_OF_CHANGE\" is not null OR \"RETIREMENT_GIS_CHANGE_PERSON\" <> '' OR \"RETIREMENT_REASON\" <> '' OR \"RETIREMENT_INITIATOR_OF_CHANGE\" <> '')")
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
-        #if there are any mismatches, get the # and report out on all unique IDs
+    #if there are any mismatches, get the # and report out on all unique IDs
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " CURRENT features have one or more of the following RETIREMENT change\n")
         fh.write("             management attributes filled in:\n")
@@ -555,7 +555,7 @@ def section_2_check_change_attribute_fields():
     arcpy.SelectLayerByAttribute_management('fc_lyr', "SUBSET_SELECTION", "(\"RETIREMENT_DATE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" is null OR \"RETIREMENT_REASON\" is null OR \"RETIREMENT_INITIATOR_OF_CHANGE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" ='' OR \"RETIREMENT_REASON\" = '' OR \"RETIREMENT_INITIATOR_OF_CHANGE\" ='')")
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
-        #if there are any mismatches, get the # and report out on all unique IDs
+    #if there are any mismatches, get the # and report out on all unique IDs
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " RETIRED features missing one or more of the following RETIREMENT\n")
         fh.write("             change management attributes:\n")
@@ -589,7 +589,7 @@ def section_2_check_change_attribute_fields():
     arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", "\"MODIFICATION_TYPE\" IN ('NEW', 'MODIFIED') AND ((\"GIS_CHANGE_DATE\" is null) OR (\"GIS_CHANGE_PERSON\" is null OR \"GIS_CHANGE_PERSON\" = '') OR (\"CHANGE_REASON\" is null OR \"CHANGE_REASON\" = '') OR (\"INITIATOR_OF_CHANGE\" is null OR \"INITIATOR_OF_CHANGE\" = ''))")
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
-        #if there are any mismatches, get the # and report out on all unique IDs
+    #if there are any mismatches, get the # and report out on all unique IDs
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as NEW or MODIFIED missing one or more of the following\n")
         fh.write("             CURRENT change management attributes:\n")
@@ -651,8 +651,7 @@ def section_2_check_change_attribute_fields():
     arcpy.AddMessage('') 
 
     
-# Check: RETIREMENT or PERMANENT RETIREMENT features must have all retirement fields populated.
-    
+    # Check: RETIREMENT or PERMANENT RETIREMENT features must have all retirement fields populated.
     ruleMessage = 'RULE TO CHECK: Features with [MODIFICATION_TYPE] flagged as RETIREMENT or PERMANENT_RETIREMENT must have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
     arcpy.AddMessage(ruleMessage)
     fh.write(ruleMessage + "\n") 
@@ -662,7 +661,7 @@ def section_2_check_change_attribute_fields():
     arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"MODIFICATION_TYPE\" IN ('RETIREMENT', 'PERMANENT_RETIREMENT') AND (\"RETIREMENT_DATE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" is null OR \"RETIREMENT_REASON\" is null OR \"RETIREMENT_INITIATOR_OF_CHANGE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" = '' OR \"RETIREMENT_REASON\" = '' OR \"RETIREMENT_INITIATOR_OF_CHANGE\" = '')")
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
-        #if there are any mismatches, get the # and report out on all unique IDs
+    #if there are any mismatches, get the # and report out on all unique IDs
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as RETIREMENT or PERMANENT RETIREMENT missing one\n")
         fh.write("             or more of the following RETIREMENT change management attributes:\n")
@@ -717,7 +716,7 @@ def section_2_check_change_attribute_fields():
         row = rows.next()
     
     # Collect unique values from all four person fields for uppercase validation.
-    #Checking for uppercase in GIS_CHANGE_PERSON
+    # Checking for uppercase in GIS_CHANGE_PERSON
     # Check GIS_CHANGE_PERSON values for lowercase characters; select and report offending feature IDs.
     tempList = []
     for x in gisChangePersonList:
@@ -742,7 +741,7 @@ def section_2_check_change_attribute_fields():
         fh.write('\n')
     
     # Check INITIATOR_OF_CHANGE values for lowercase characters.
-    #Checking for uppercase in INITIATOR_OF_CHANGE
+    # Checking for uppercase in INITIATOR_OF_CHANGE
     tempList = []
     for x in initiatorOfChangeList:
         if x.isupper() <> True:
@@ -790,7 +789,7 @@ def section_2_check_change_attribute_fields():
             okCount = okCount + 1
         fh.write('\n')
     
-        #Checking for uppercase in RETIREMENT_INITIATOR_OF_CHANGE
+    #Checking for uppercase in RETIREMENT_INITIATOR_OF_CHANGE
     # Check RETIREMENT_INITIATOR_OF_CHANGE values for lowercase characters.
     tempList = []
     for x in retirementInitiatorOfChangeList:
@@ -830,6 +829,10 @@ def section_2_check_change_attribute_fields():
 
 # SECTION 3: Validate legalization and approval dates against feature class type and associated legislation.
 def section_3_check_legalization_and_approval_attributes():
+    '''
+    Section 3 — Legalization and approval dates: For legal OGMAs: verifies LEGALIZATION_DATE is present, and that FRPA/OGAA-specific date fields align with the ASSOCIATED_ACT_NAME value.
+      For SLRP boundaries: checks APPROVAL_DATE exists when status is "Approved".
+    '''
     section = '----------Section 3----------'
     arcpy.AddMessage(section)
     
@@ -1126,6 +1129,9 @@ def section_3_check_legalization_and_approval_attributes():
 
 # SECTION 4: Ensure no feature has a zero or null value in its unique ID or provincial ID fields.
 def section_4_check_for_0_or_null_in_FEATID_and_PROVID():
+    '''
+    Section 4 — Zero/null in FEAT_ID and PROV_ID: Ensures no feature has a 0 or null in its unique identifier or provincial identifier fields — both are required.
+    '''
     section = '----------Section 4----------'
     arcpy.AddMessage(section)
     fh = open(attributeQAReportFile, 'a')  
@@ -1187,6 +1193,10 @@ def section_4_check_for_0_or_null_in_FEATID_and_PROVID():
     arcpy.AddMessage('')
             
 def section_5_check_for_gaps_in_PROVID():
+    '''
+    Section 5 — Gaps in sequential PROV_ID: Walks the full list of PROV_IDs and checks for any gaps in the sequential numbering.
+    Different logic applies to OGMAs (compound IDs like SKE_23_xxx) vs. flat integer IDs for LUs and boundaries. Includes special hardcoded exceptions for the 2015 Skeena mass deletion event.    
+    '''
     section = '----------Section 5----------'
     arcpy.AddMessage(section)
     fh = open(attributeQAReportFile, 'a')  
@@ -1371,7 +1381,11 @@ def section_5_check_for_gaps_in_PROVID():
     arcpy.AddMessage('')
 
 # SECTION 6: Check for gaps in the sequential unique feature ID (FEAT_ID / INTERNAL_ID) numbering.
-def section_6_check_for_gaps_in_feature_id():   
+def section_6_check_for_gaps_in_feature_id():  
+    '''
+    Section 6 — Gaps in sequential FEAT_ID: Same gap-detection logic for the internal unique feature IDs. Looks across all FCs in the feature dataset for SLRP planning features.
+      Has hardcoded start values (500000) to skip ranges that were deliberately voided.
+    ''' 
     section = '----------Section 6----------'
     arcpy.AddMessage(section)        
     fh = open(attributeQAReportFile, 'a')  
@@ -1528,6 +1542,12 @@ def section_6_check_for_gaps_in_feature_id():
 
 # SECTION 7: Check for duplicate PROV_ID / PROV_ID_PART_NUMBER combinations among current features.
 def section_7_check_for_duplicate_provid_provid_part_number_in_current_records():
+    '''
+    Section 7 — Duplicate PROV_ID / PROV_ID_PART_NUMBER combinations: Among CURRENT features, the combination of PROV_ID + PROV_ID_PART_NUMBER must be unique. For OGMAs, 
+    this check spans both legal and non-legal datasets simultaneously.
+    '''
+
+
     section = '----------Section 7----------'
     arcpy.AddMessage(section)     
     fh = open(attributeQAReportFile, 'a')  
@@ -1662,6 +1682,9 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
 
 # SECTION 8: Check for duplicate values in the unique feature ID field.
 def section_8_check_for_duplicates_in_featID():
+    '''
+    Section 8 — Duplicate FEAT_IDs: Checks that the internal unique ID field has no duplicates across the dataset.
+    '''
     section = '----------Section 8----------'
     arcpy.AddMessage(section)
     fh = open(attributeQAReportFile, 'a')  
@@ -1741,6 +1764,10 @@ def section_8_check_for_duplicates_in_featID():
     
 # SECTION 9: Validate PROV_ID pairing rules based on MODIFICATION_TYPE.
 def section_9_check_for_provid_pairs_based_on_mod_type():
+    '''
+    Section 9 — PROV_ID pairs by modification type: Enforces the core change management rules: if a feature is MODIFIED, 
+    there must be a matching PROV_ID with RETIREMENT; if a feature is RETIREMENT, there must be a matching MODIFIED. PERMANENT RETIREMENT must have no partner records with any other mod type.
+    '''
     section = '----------Section 9----------'
     arcpy.AddMessage(section)
     fh = open(attributeQAReportFile, 'a')  
@@ -2170,6 +2197,9 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
 
 # SECTION 10: Check for duplicate PROV_ID/PROV_ID_PART_NUMBER combinations within each MODIFICATION_TYPE.
 def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
+    '''
+    Section 10 — PROV_ID duplication by mod type: Checks for cases where the same PROV_ID appears more than once under the same modification type — a sign of duplicate processing.
+    '''
 
     #BUG - Medium: File handle opened here on line 2037 is immediately orphaned by a second open() on line 2041.
     #BUG - Medium: The first handle is never closed, holding a file lock until the process ends.
@@ -2250,6 +2280,10 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
 
 # SECTION 11 (SLRP planning features): Check PROV_ID integrity and cross-reference against SLRP boundary dataset.
 def section_11_check_lo_nlpf_boundary_specific_dependancies():
+    '''
+    Section 11 — Boundary and LU/BEO dependencies: For SLRP planning features, checks that the SLRP boundary names used in features actually exist in the SLRP boundary dataset (restricted to CURRENT status). 
+    For LUs, checks BEO (Biodiversity Emphasis Option) dependencies.
+    '''
     #BUG - Medium: File handle opened unconditionally here (line 2109) and again on line 2111 and line 2115.
     #BUG - Medium: The first two handles are orphaned. Three opens, only one close. Fix: single open() after the if-check.
     fh = open(attributeQAReportFile, 'a')
@@ -2694,6 +2728,10 @@ def section_11_check_lu_beo_dependancies():
 
 # SECTION 12: Validate all field values against their assigned GDB coded-value domains.
 def section_12_check_domains():
+    '''
+    Section 12 — Domain value validation: For every field that has a coded-value domain assigned in the geodatabase, 
+    confirms that all actual field values are within the allowed domain list. Handles nullable domain fields properly.
+    '''
     import arcpy.da
     
     section = '----------Section 12----------'
@@ -2790,6 +2828,12 @@ def section_12_check_domains():
 # SECTION 13 (DISABLED): Validate URL fields contain reachable HTTP endpoints.
 # This section is commented out in main() — under development since 2017.
 def section_13_check_url_fields():
+    '''
+    Section 13 — URL validation (disabled): Written to validate that ENABLING_DOCUMENT_URL and RSRCE_PLAN_METADATA_LINK contain real, reachable URLs. Currently commented out of main()
+      — marked "UNDER DEVELOPMENT" since 2017.
+    '''
+
+
     import arcpy.da
     
     section = '----------Section 13----------'
