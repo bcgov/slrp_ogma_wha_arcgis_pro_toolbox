@@ -79,7 +79,7 @@ Modification: removed "No errors" messages in tool interface as they were being 
 '''
 
 # Import standard libraries, arcpy GIS library, and urllib2 for URL validation (Section 13).
-import sys, string, os, os.path, datetime, arcpy, urllib2
+import sys, string, os, os.path, datetime, arcpy, urllib.request
 from arcpy import env
 
 # Allow arcpy to overwrite existing outputs without raising errors.
@@ -99,7 +99,7 @@ try:
         
     masterDataset = sys.argv[2]
 except:
-    print "no arguments"
+    print("no arguments")
 
 ####################################################################
 ##TESTING BLOCK
@@ -266,7 +266,7 @@ def section_0_DRM_checks():
     fh.write("\n")
     
     # Validate: the count difference (post minus pre) should equal NEW + MODIFIED count.
-    if masterUpdateDifference <> int(modifiedCount) + int(newCount):
+    if masterUpdateDifference != int(modifiedCount) + int(newCount):
         fh.write("***ERROR --> " + str(masterUpdateDifference) + " feature(s) added to post-update feature class.\n")
         fh.write("            " + str(int(modifiedCount) + int(newCount)) + " feature(s) flagged as NEW or MODIFIED.\n")
         fh.write("             These numbers should match.\n")
@@ -702,16 +702,16 @@ def section_2_check_change_attribute_fields():
     row = rows.next()
     while row:
         if row.getValue("GIS_CHANGE_PERSON") not in gisChangePersonList:
-            if row.getValue("GIS_CHANGE_PERSON")<> None:
-                gisChangePersonList.append(row.getValue("GIS_CHANGE_PERSON"))  
+            if row.getValue("GIS_CHANGE_PERSON") != None:
+                gisChangePersonList.append(row.getValue("GIS_CHANGE_PERSON"))
         if row.getValue("INITIATOR_OF_CHANGE") not in initiatorOfChangeList:
-            if row.getValue("INITIATOR_OF_CHANGE")<> None:
+            if row.getValue("INITIATOR_OF_CHANGE") != None:
                 initiatorOfChangeList.append(row.getValue("INITIATOR_OF_CHANGE"))
         if row.getValue("RETIREMENT_GIS_CHANGE_PERSON") not in retirementGISChangePersonList:
-            if row.getValue("RETIREMENT_GIS_CHANGE_PERSON")<> None:
+            if row.getValue("RETIREMENT_GIS_CHANGE_PERSON") != None:
                 retirementGISChangePersonList.append(row.getValue("RETIREMENT_GIS_CHANGE_PERSON"))
         if row.getValue("RETIREMENT_INITIATOR_OF_CHANGE") not in retirementInitiatorOfChangeList:
-            if row.getValue("RETIREMENT_INITIATOR_OF_CHANGE")<> None:
+            if row.getValue("RETIREMENT_INITIATOR_OF_CHANGE") != None:
                 retirementInitiatorOfChangeList.append(row.getValue("RETIREMENT_INITIATOR_OF_CHANGE"))
         row = rows.next()
     
@@ -720,7 +720,7 @@ def section_2_check_change_attribute_fields():
     # Check GIS_CHANGE_PERSON values for lowercase characters; select and report offending feature IDs.
     tempList = []
     for x in gisChangePersonList:
-        if x.isupper() <> True:
+        if x.isupper() != True:
             tempList.append(str(x))
     uniqueList = []
     for x in tempList:
@@ -744,7 +744,7 @@ def section_2_check_change_attribute_fields():
     # Checking for uppercase in INITIATOR_OF_CHANGE
     tempList = []
     for x in initiatorOfChangeList:
-        if x.isupper() <> True:
+        if x.isupper() != True:
             tempList.append(str(x))
     uniqueList = []
     for x in tempList:
@@ -768,8 +768,8 @@ def section_2_check_change_attribute_fields():
     #Checking for uppercase in RETIREMENT_GIS_CHANGE_PERSON
     tempList = []
     for x in retirementGISChangePersonList:
-        if x.isupper() <> True:
-            if x.isspace <> True:
+        if x.isupper() != True:
+            if x.isspace != True:
                 tempList.append(str(x))
     uniqueList = []
     for x in tempList:
@@ -793,7 +793,7 @@ def section_2_check_change_attribute_fields():
     # Check RETIREMENT_INITIATOR_OF_CHANGE values for lowercase characters.
     tempList = []
     for x in retirementInitiatorOfChangeList:
-        if x.isupper() <> True:
+        if x.isupper() != True:
             tempList.append(str(x))
     uniqueList = []
     for x in tempList:
@@ -889,7 +889,7 @@ def section_3_check_legalization_and_approval_attributes():
     
     # Run the date-presence query for all applicable feature classes and report affected feature IDs.
     if featClassName not in ('landscape_unit_poly', 'old_growth_management_area_legal_bc_poly', 'old_growth_management_area_non_legal_bc_poly'):
-        if featClassName[:31] <>  'slrp_planning_feature_non_legal':
+        if featClassName[:31] !=  'slrp_planning_feature_non_legal':
             #get list of errors & report out
             arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", selectQuery)
@@ -927,7 +927,7 @@ def section_3_check_legalization_and_approval_attributes():
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"ASSOCIATED_ACT_NAME\" = 'FRPA and OGAA' AND (\"LEGALIZATION_FRPA_DATE\" is null OR \"LEGALIZATION_OGAA_DATE\" is null OR \"LEGALIZATION_FRPA_DATE\" < date'1920-01-01' OR \"LEGALIZATION_OGAA_DATE\" < date'1920-01-01')")
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         #BUG - Low: Debug print statement left in production code. Python 3 syntax error if script is ported.
-        print 'cow', errorCount
+        print('cow', errorCount)
         
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
@@ -1576,7 +1576,7 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
         
     # Non-OGMA feature classes: concatenate PROV_ID and PART_NUMBER with separator and check for duplicates.
     #non-ogma feature classes
-    if featClassName [:3] <> 'old':
+    if featClassName [:3] != 'old':
             #check that provid/provid part number are not duplicated in current features
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", statusQuery)
         fcProvIDList = []
@@ -2761,7 +2761,7 @@ def section_12_check_domains():
             coded_values = domain.codedValues
             #BUG - Medium: .iteritems() is Python 2 only. Python 3 / ArcGIS Pro requires .items().
             #BUG - Medium: This will raise AttributeError immediately on any Python 3 environment.
-            for val in coded_values.iteritems():
+            for val in coded_values.items():
                 domainValLists.append(val)
             for domainValList in domainValLists:
                 codedValueList.append(domainValList[0])
@@ -2866,7 +2866,7 @@ def section_13_check_url_fields():
     # Attempt to open each URL; flag any that raise an exception (unreachable or malformed).
     for url in urlList:
         try:
-            urllib2.urlopen(url)
+            urllib.request.urlopen(url)
         except:
             okTest = okTest + 1
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", "\"ENABLING_DOCUMENT_URL\" = '" + url + "'")
@@ -2907,7 +2907,7 @@ def section_13_check_url_fields():
             urlList.append(row.getValue("RSRCE_PLAN_METADATA_LINK"))
     for url in urlList:
         try:
-            urllib2.urlopen(url)
+            urllib.request.urlopen(url)
         except:
             okTest = okTest + 1
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", "\"RSRCE_PLAN_METADATA_LINK\" = '" + url + "'")
