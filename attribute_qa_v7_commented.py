@@ -334,13 +334,11 @@ def section_1_check_for_false_nulls():
         
         badNullCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if badNullCount > 0:
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             nullErrorList = []
-            while row:
-                if row.getValue(uniqueIDField) not in nullErrorList:
-                    nullErrorList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in nullErrorList:
+                        nullErrorList.append(row[0])
             fh.write('***ERROR --> [' + str(uniqueIDField) + '] has ' + str(arcpy.GetCount_management("fc_lyr")) + ' features with <NULL>, <Null>, NULL, or Null as a string instead of a true NULL value: \n')
             for uniqueID in nullErrorList:
                 fh.write('     ' + uniqueIDField + ' ' + str(uniqueID) + ": False Null in " + str(field) + '\n')
@@ -364,13 +362,11 @@ def section_1_check_for_false_nulls():
         
         badNullCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if badNullCount > 0:
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             nullErrorList = []
-            while row:
-                if row.getValue(uniqueIDField) not in nullErrorList:
-                    nullErrorList.append(str(row.getValue(uniqueIDField)))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in nullErrorList:
+                        nullErrorList.append(str(row[0]))
             fh.write('***ERROR --> [' + str(field) + '] has ' + str(arcpy.GetCount_management("fc_lyr")) + ' features with <Null> in a numeric field: \n')
             
             for uniqueID in nullErrorList:
@@ -428,13 +424,11 @@ def section_2_check_change_attribute_fields():
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as NEW, MODIFIED, or MODIFIED_NOREPLACE have status\n")
         fh.write("             set as RETIRED: \n")
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -459,13 +453,11 @@ def section_2_check_change_attribute_fields():
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as RETIREMENT or PERMANENT RETIREMENT have status\n")
         fh.write("             set as CURRENT: \n")
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -493,13 +485,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             management attributes:\n")
         fh.write("             [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON],\n")
         fh.write("             [INITIATOR_OF_CHANGE]\n")      
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -527,13 +517,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
         
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -562,13 +550,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
     
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -596,13 +582,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON],\n")
         fh.write("             [INITIATOR_OF_CHANGE]\n")
         
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -630,13 +614,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
         
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -667,13 +649,11 @@ def section_2_check_change_attribute_fields():
         fh.write("             or more of the following RETIREMENT change management attributes:\n")
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")    
-        rows = arcpy.SearchCursor('fc_lyr')
-        row = rows.next()
         uniqueList = []
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
         
         for uniqueID in uniqueList:
@@ -698,22 +678,20 @@ def section_2_check_change_attribute_fields():
     initiatorOfChangeList = []
     retirementGISChangePersonList = []
     retirementInitiatorOfChangeList = []
-    rows = arcpy.SearchCursor('fc_lyr')
-    row = rows.next()
-    while row:
-        if row.getValue("GIS_CHANGE_PERSON") not in gisChangePersonList:
-            if row.getValue("GIS_CHANGE_PERSON") != None:
-                gisChangePersonList.append(row.getValue("GIS_CHANGE_PERSON"))
-        if row.getValue("INITIATOR_OF_CHANGE") not in initiatorOfChangeList:
-            if row.getValue("INITIATOR_OF_CHANGE") != None:
-                initiatorOfChangeList.append(row.getValue("INITIATOR_OF_CHANGE"))
-        if row.getValue("RETIREMENT_GIS_CHANGE_PERSON") not in retirementGISChangePersonList:
-            if row.getValue("RETIREMENT_GIS_CHANGE_PERSON") != None:
-                retirementGISChangePersonList.append(row.getValue("RETIREMENT_GIS_CHANGE_PERSON"))
-        if row.getValue("RETIREMENT_INITIATOR_OF_CHANGE") not in retirementInitiatorOfChangeList:
-            if row.getValue("RETIREMENT_INITIATOR_OF_CHANGE") != None:
-                retirementInitiatorOfChangeList.append(row.getValue("RETIREMENT_INITIATOR_OF_CHANGE"))
-        row = rows.next()
+    with arcpy.da.SearchCursor('fc_lyr', ["GIS_CHANGE_PERSON", "INITIATOR_OF_CHANGE", "RETIREMENT_GIS_CHANGE_PERSON", "RETIREMENT_INITIATOR_OF_CHANGE"]) as cursor:
+        for row in cursor:
+            if row[0] not in gisChangePersonList:
+                if row[0] != None:
+                    gisChangePersonList.append(row[0])
+            if row[1] not in initiatorOfChangeList:
+                if row[1] != None:
+                    initiatorOfChangeList.append(row[1])
+            if row[2] not in retirementGISChangePersonList:
+                if row[2] != None:
+                    retirementGISChangePersonList.append(row[2])
+            if row[3] not in retirementInitiatorOfChangeList:
+                if row[3] != None:
+                    retirementInitiatorOfChangeList.append(row[3])
     
     # Collect unique values from all four person fields for uppercase validation.
     # Checking for uppercase in GIS_CHANGE_PERSON
@@ -726,12 +704,10 @@ def section_2_check_change_attribute_fields():
     for x in tempList:
         selectionString = "\"GIS_CHANGE_PERSON\" = " + "'" + x + "'"
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
     if len(uniqueList)>0:
         fh.write("***ERROR --> " + str(arcpy.GetCount_management("fc_lyr")) + " features have lowercase text in GIS_CHANGE_PERSON field: \n")
@@ -750,12 +726,10 @@ def section_2_check_change_attribute_fields():
     for x in tempList:
         selectionString = "\"INITIATOR_OF_CHANGE\" = " + "'" + x + "'"
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
     if len(uniqueList)>0:
         fh.write("***ERROR --> " + str(arcpy.GetCount_management("fc_lyr")) + " features have lowercase text in INITIATOR_OF_CHANGE field: \n")
@@ -775,12 +749,10 @@ def section_2_check_change_attribute_fields():
     for x in tempList:
         selectionString = "\"RETIREMENT_GIS_CHANGE_PERSON\" = " + "'" + x + "'"
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
     if len(uniqueList)>0:
         fh.write("***ERROR --> " + str(arcpy.GetCount_management("fc_lyr")) + " features have lowercase text in RETIREMENT_GIS_CHANGE_PERSON field: \n")
@@ -799,12 +771,10 @@ def section_2_check_change_attribute_fields():
     for x in tempList:
         selectionString = "\"RETIREMENT_INITIATOR_OF_CHANGE\" = " + "'" + x + "'"
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-        while row:
-            if row.getValue(uniqueIDField) not in uniqueList:
-                uniqueList.append(row.getValue(uniqueIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in uniqueList:
+                    uniqueList.append(row[0])
         uniqueList.sort()
     if len(uniqueList)>0:
         fh.write("***ERROR --> " + str(arcpy.GetCount_management("fc_lyr")) + " features have lowercase text in RETIREMENT_INITIATOR_OF_CHANGE field: \n")
@@ -896,13 +866,11 @@ def section_3_check_legalization_and_approval_attributes():
             errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
             if errorCount > 0:
                 fh.write("***ERROR --> " + str(errorCount) + " features have " + fieldName + " missing:\n")
-                rows = arcpy.SearchCursor('fc_lyr')
-                row = rows.next()
                 uniqueList = []
-                while row:
-                    if row.getValue(uniqueIDField) not in uniqueList:
-                        uniqueList.append(row.getValue(uniqueIDField))
-                    row = rows.next()
+                with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                    for row in cursor:
+                        if row[0] not in uniqueList:
+                            uniqueList.append(row[0])
                 uniqueList.sort()
                 for uniqueID in uniqueList:
                     fh.write('                ' + uniqueIDField + ' ' + str(uniqueID) + '\n')
@@ -932,13 +900,11 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features with [ASSOCIATED_ACT_NAME] = FRPA and OGAA is missing either [LEGALIZATION_FRPA_DATE] or [LEGALIZATION_OGAA_DATE].\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -963,13 +929,11 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features with [ASSOCIATED_ACT_NAME] = OGAA are missing [LEGALIZATION_OGAA_DATE].\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -997,13 +961,11 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features with [ASSOCIATED_ACT_NAME] = OGAA have [LEGALIZATION_FRPA_DATE] filled in.\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -1028,13 +990,11 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features with [ASSOCIATED_ACT_NAME] = FRPA are missing [LEGALIZATION_FRPA_DATE].\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -1061,13 +1021,11 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features with [ASSOCIATED_ACT_NAME] = FRPA have [LEGALIZATION_OGAA_DATE] filled in.\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -1095,16 +1053,14 @@ def section_3_check_legalization_and_approval_attributes():
             #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
-            rows = arcpy.SearchCursor('fc_lyr')
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
-                    #BUG - High: instead of row.getValue(uniqueIDField). Fix: uniqueList.append(row.getValue(uniqueIDField)).
-                    #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
-                    uniqueList.append(uniqueIDField)
-                row = rows.next()
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
+                        #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
+                        #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
+                        uniqueList.append(uniqueIDField)
             uniqueList.sort()
             
             for uniqueID in uniqueList:
@@ -1222,15 +1178,13 @@ def section_5_check_for_gaps_in_PROVID():
     # SLRP planning features: parse compound PROV_IDs (e.g. CAR_20_123) grouped by SLRP ID segment.
     if featClassName[:21] == 'slrp_planning_feature':
         arcpy.SelectLayerByAttribute_management('fc_lyr', "CLEAR_SELECTION")
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-    
-        fcProvIDList = []    
-        while row:
-            if row.getValue(provIDField) not in fcProvIDList:
-                fcProvIDList.append(row.getValue(provIDField))
-            row = rows.next()
-    
+
+        fcProvIDList = []
+        with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in fcProvIDList:
+                    fcProvIDList.append(row[0])
+
         fcSLRPIDList = []
         for fcProvID in fcProvIDList:
             slrpID = fcProvID.split('_')
@@ -1246,23 +1200,20 @@ def section_5_check_for_gaps_in_PROVID():
         for fcSLRPID in fcSLRPIDList:
             selectionString = provIDField + " like " + "'%$_" + fcSLRPID + "$_%' ESCAPE '$'"
             arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
-            
-            subsetProvIDList = [] 
+            subsetProvIDList = []
             # Skeena special case: features with SKE_17, SKE_20, SKE_23 prefixes have known mass-deletion gaps;
             specialSubsetProvIDList = []  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
             # route them to a separate list with hardcoded minimum values to avoid false gap errors.
-            while row:
-                if row.getValue(provIDField)[0:6] == 'SKE_17':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
-                    specialSubsetProvIDList.append(row.getValue(provIDField))
-                elif row.getValue(provIDField)[0:6] == 'SKE_20':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
-                    specialSubsetProvIDList.append(row.getValue(provIDField))
-                elif row.getValue(provIDField)[0:6] == 'SKE_23':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
-                    specialSubsetProvIDList.append(row.getValue(provIDField))
-                elif row.getValue(provIDField) not in subsetProvIDList:
-                    subsetProvIDList.append(row.getValue(provIDField))
-                row = rows.next()
+            with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+                for row in cursor:
+                    if row[0][0:6] == 'SKE_17':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
+                        specialSubsetProvIDList.append(row[0])
+                    elif row[0][0:6] == 'SKE_20':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
+                        specialSubsetProvIDList.append(row[0])
+                    elif row[0][0:6] == 'SKE_23':  ##### dealing with special case due to Skeena mass deletions (Sept 2015) #####
+                        specialSubsetProvIDList.append(row[0])
+                    elif row[0] not in subsetProvIDList:
+                        subsetProvIDList.append(row[0])
     
             # Extract the numeric suffix from each PROV_ID and build a dictionary keyed by SLRP ID segment.
             provIDSuffixList = []
@@ -1336,16 +1287,13 @@ def section_5_check_for_gaps_in_PROVID():
     if featClassName in ('slrp_planning_boundary_bc_poly', 'landscape_unit_poly'):
         
         arcpy.SelectLayerByAttribute_management("fc_lyr", "CLEAR_SELECTION")
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-    
-        fcProvIDList = []  
-        
-        while row:
-            if row.getValue(provIDField) not in fcProvIDList:
-                fcProvIDList.append(row.getValue(provIDField))
-            row = rows.next()
-        
+
+        fcProvIDList = []
+        with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in fcProvIDList:
+                    fcProvIDList.append(row[0])
+
         for fcProvID in fcProvIDList:
             maxfcProvID = -99999999999999
             if int(fcProvID) > maxfcProvID:
@@ -1419,17 +1367,15 @@ def section_6_check_for_gaps_in_feature_id():
               
 
         # Build a combined FEAT_ID list across all matching feature classes for cross-FC gap detection.
-        featIDList = []    
-        for x in fcList2: 
-            arcpy.MakeFeatureLayer_management(x, "featClass_lyr", "", "")    
-            rows = arcpy.SearchCursor("featClass_lyr")
-            row = rows.next()
-            while row:
-                if row.getValue(uniqueIDField) not in featIDList:
-                    featIDList.append(row.getValue(uniqueIDField))
-                featIDList.sort()
-                row = rows.next()
-        
+        featIDList = []
+        for x in fcList2:
+            arcpy.MakeFeatureLayer_management(x, "featClass_lyr", "", "")
+            with arcpy.da.SearchCursor("featClass_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in featIDList:
+                        featIDList.append(row[0])
+                    featIDList.sort()
+
         # Hardcoded start value of 500000: skips IDs voided by historical mass deletions.
         maxX = max(featIDList)
                         
@@ -1455,15 +1401,13 @@ def section_6_check_for_gaps_in_feature_id():
 
             
         arcpy.SelectLayerByAttribute_management("fc_lyr", "CLEAR_SELECTION")
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
         featIDList = []
-        while row:
-            if row.getValue(uniqueIDField) not in featIDList:
-                featIDList.append(row.getValue(uniqueIDField))
-            featIDList.sort()
-            row = rows.next()
-           
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in featIDList:
+                    featIDList.append(row[0])
+                featIDList.sort()
+
         for x in featIDList:
             maxX = -9999999999999999999
             if int(x) > maxX:
@@ -1497,14 +1441,12 @@ def section_6_check_for_gaps_in_feature_id():
         arcpy.AddMessage(checkMessage)
         fh.write(checkMessage + "\n")
         arcpy.SelectLayerByAttribute_management("fc_lyr", "CLEAR_SELECTION", "")
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
         featIDList = []
-        while row:
-            if row.getValue(uniqueIDField) not in featIDList:
-                featIDList.append(row.getValue(uniqueIDField))
-            row = rows.next()
-            
+        with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in featIDList:
+                    featIDList.append(row[0])
+
         for x in featIDList:
             maxX = -9999999999999999999
             if int(x) > maxX:
@@ -1582,21 +1524,19 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
         fcProvIDList = []
         currentCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if currentCount > 0:
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()             
-            while row:
-                 a = row.getValue(provIDField)
-                 b = row.getValue(provIDPartNum)
-                 provID_with_part = str(a) + 'xxxxx' + str(b)
-                 fcProvIDList.append(provID_with_part)
-                 row = rows.next() 
-        
+            with arcpy.da.SearchCursor("fc_lyr", [provIDField, provIDPartNum]) as cursor:
+                for row in cursor:
+                    a = row[0]
+                    b = row[1]
+                    provID_with_part = str(a) + 'xxxxx' + str(b)
+                    fcProvIDList.append(provID_with_part)
+
         dupProvIDList = []
         for x in fcProvIDList:
             if fcProvIDList.count(x)> 1:
-                if x not in dupProvIDList: 
+                if x not in dupProvIDList:
                     dupProvIDList.append(x)
-        
+
         if len(dupProvIDList) > 0:
             for x in dupProvIDList:
                 y = x.split('xxxxx')
@@ -1604,7 +1544,7 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
                 fh.write('***ERROR --> PROVID/PROVID_PART_NUMBER Duplicate: PROVID ' +  str(provID) + ' with CURRENT\n')
                 fh.write('             status has duplicates in [PROVID_PART_NUMBER] field.\n')
                 okTest = okTest + 1
-    
+
 
     # OGMAs: check for duplicate PROV_ID/PART_NUMBER combinations across BOTH legal and non-legal datasets.
     #OGMAS - will look at duplicates in provid/part number in both legal & non legal datasets
@@ -1614,21 +1554,19 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
     if featClassName == 'old_growth_management_area_non_legal_bc_poly':
         otherOGMAfc = 'old_growth_management_area_legal_bc_poly'
         otherPROVID = "LEGAL_OGMA_PROVID"
-    
-    
+
+
         arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", statusQuery)
         fcProvIDList = []
         currentCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if currentCount> 0:
-             rows = arcpy.SearchCursor("fc_lyr")
-             row = rows.next()             
-             while row:
-                 a = row.getValue(provIDField)
-                 b = row.getValue(provIDPartNum)
-                 provID_with_part = str(a) + 'xxxxx' + str(b)
-                 fcProvIDList.append(provID_with_part)
-                 row = rows.next() 
-                 
+            with arcpy.da.SearchCursor("fc_lyr", [provIDField, provIDPartNum]) as cursor:
+                for row in cursor:
+                    a = row[0]
+                    b = row[1]
+                    provID_with_part = str(a) + 'xxxxx' + str(b)
+                    fcProvIDList.append(provID_with_part)
+
         # Append PROV_ID/PART_NUMBER combinations from the other OGMA dataset into the same list.
         #now read the other ogma feature class (legal or non legal) provid/part #'s into the same list
         arcpy.MakeFeatureLayer_management(otherOGMAfc, "other_ogma_lyr")
@@ -1637,16 +1575,14 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
         #BUG - High: If the primary layer has zero current features, the other OGMA layer is never read.
         #BUG - High: Fix: change 'fc_lyr' to 'other_ogma_lyr' to guard the correct layer.
         currentCount = int(str(arcpy.GetCount_management('fc_lyr')))
-        
+
         if currentCount > 0:
-            rows = arcpy.SearchCursor("other_ogma_lyr")
-            row = rows.next()             
-            while row:
-                 a = row.getValue(otherPROVID)
-                 b = row.getValue("PROVID_PART_NUMBER")
-                 provID_with_part = str(a) + 'xxxxx' + str(b)
-                 fcProvIDList.append(provID_with_part)
-                 row = rows.next() 
+            with arcpy.da.SearchCursor("other_ogma_lyr", [otherPROVID, "PROVID_PART_NUMBER"]) as cursor:
+                for row in cursor:
+                    a = row[0]
+                    b = row[1]
+                    provID_with_part = str(a) + 'xxxxx' + str(b)
+                    fcProvIDList.append(provID_with_part)
             fcProvIDList.sort()
         
         # Find and report any PROV_ID/PART_NUMBER combinations that appear more than once.
@@ -1725,15 +1661,13 @@ def section_8_check_for_duplicates_in_featID():
     # Build the full ID list across all relevant feature classes.
     featIDList = [] 
     
-    for x in fcList2: 
-        arcpy.MakeFeatureLayer_management(x, "featClass_lyr", "", "")    
-        rows = arcpy.SearchCursor("featClass_lyr")
-        row = rows.next()
-        while row:
-            featIDList.append(row.getValue(uniqueIDField))
-            featIDList.sort()
-            row = rows.next()
-    
+    for x in fcList2:
+        arcpy.MakeFeatureLayer_management(x, "featClass_lyr", "", "")
+        with arcpy.da.SearchCursor("featClass_lyr", [uniqueIDField]) as cursor:
+            for row in cursor:
+                featIDList.append(row[0])
+                featIDList.sort()
+
     # Walk the ID list and flag any value that appears more than once.
     okTest = 0        
     for y in featIDList:
@@ -2225,13 +2159,11 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
     okTest = 0
     # Collect all distinct MODIFICATION_TYPE values present in the dataset.
     arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"MODIFICATION_TYPE\" is not NULL")
-    rows = arcpy.SearchCursor("fc_lyr")
-    row = rows.next()
     modificationTypeList = []
-    while row:
-        if row.getValue("MODIFICATION_TYPE") not in modificationTypeList:
-            modificationTypeList.append(row.getValue("MODIFICATION_TYPE"))
-        row = rows.next()
+    with arcpy.da.SearchCursor("fc_lyr", ["MODIFICATION_TYPE"]) as cursor:
+        for row in cursor:
+            if row[0] not in modificationTypeList:
+                modificationTypeList.append(row[0])
     modificationTypeList.sort()
     
     # For each modification type, select matching features and collect PROV_ID/PART_NUMBER pairs.
@@ -2240,15 +2172,13 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if errorCount >0:
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             provIDList = []
-            while row:
-                provID = row.getValue(provIDField)
-                partNum = row.getValue("PROVID_PART_NUMBER")
-                concatenation = str(provID) + "   PROVID_PART_NUMBER " + str(partNum)
-                provIDList.append(concatenation)
-                row = rows.next()
+            with arcpy.da.SearchCursor("fc_lyr", [provIDField, "PROVID_PART_NUMBER"]) as cursor:
+                for row in cursor:
+                    provID = row[0]
+                    partNum = row[1]
+                    concatenation = str(provID) + "   PROVID_PART_NUMBER " + str(partNum)
+                    provIDList.append(concatenation)
             provIDList.sort()
             # Build a deduplicated list of any PROV_ID/PART_NUMBER pairs that appear more than once.
             uniqueList = []
@@ -2315,15 +2245,13 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
         
         # Collect all unique PROV_IDs from the update dataset.
         arcpy.SelectLayerByAttribute_management("fc_lyr", "CLEAR_SELECTION")
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
-    
-        fcProvIDList = []    
-        while row:
-            if row.getValue(provIDField) not in fcProvIDList:
-                fcProvIDList.append(row.getValue(provIDField))
-            row = rows.next()
-        
+
+        fcProvIDList = []
+        with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in fcProvIDList:
+                    fcProvIDList.append(row[0])
+
         # Parse the middle segment (SLRP ID) from each compound PROV_ID for boundary cross-reference.
         fcSLRPIDList = []
         for x in fcProvIDList:
@@ -2353,15 +2281,12 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
                 arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
                 fh.write("***ERROR --> " + str(arcpy.GetCount_management('fc_lyr')) + " features have a PROVID with SLRP ID prefix " + y + " that does not occur in the SLRP boundary dataset: \n")
                 
-                rows = arcpy.SearchCursor("fc_lyr")
-                row = rows.next()
                 uniqueList = []
-                while row:
-                    if row.getValue(uniqueIDField) not in uniqueList:
-                        uniqueList.append(row.getValue(uniqueIDField))
-                    row = rows.next()
-          
-                    uniqueList.sort()
+                with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                    for row in cursor:
+                        if row[0] not in uniqueList:
+                            uniqueList.append(row[0])
+                        uniqueList.sort()
             
                 for x in uniqueList:
                     fh.write('                ' + uniqueIDField + ' ' + str(x) + '\n')
@@ -2377,14 +2302,12 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
     if featClassName[:21] == 'slrp_planning_feature':
         arcpy.SelectLayerByAttribute_management("slrp_lyr", "NEW_SELECTION", "\"STATUS\" = 0")
         #read slrp boundary names and PROVID's into a dictionary
-        rows = arcpy.SearchCursor("slrp_lyr")
-        row = rows.next()
         slrpBoundaryDict = {}
-        while row:
-            slrpProvID = row.getValue("STRGC_LAND_RSRCE_PLAN_PROVID")
-            slrpName = row.getValue("STRGC_LAND_RSRCE_PLAN_NAME")
-            slrpBoundaryDict[slrpProvID] = slrpName
-            row = rows.next()
+        with arcpy.da.SearchCursor("slrp_lyr", ["STRGC_LAND_RSRCE_PLAN_PROVID", "STRGC_LAND_RSRCE_PLAN_NAME"]) as cursor:
+            for row in cursor:
+                slrpProvID = row[0]
+                slrpName = row[1]
+                slrpBoundaryDict[slrpProvID] = slrpName
         
         fh.write('\n')
         
@@ -2409,14 +2332,12 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
             errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
             if errorCount > 0:
                 fh.write("***ERROR --> " + str(errorCount) + " features have SLRP Name and PROVID prefix mismatch:\n")
-                rows = arcpy.SearchCursor("fc_lyr")
-                row = rows.next()
                 uniqueList = []
-                while row:
-                    if row.getValue(uniqueIDField) not in uniqueList:
-                        uniqueList.append(row.getValue(uniqueIDField))
-                    row = rows.next()
-          
+                with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                    for row in cursor:
+                        if row[0] not in uniqueList:
+                            uniqueList.append(row[0])
+
                 uniqueList.sort()
                 for x in uniqueList:
                     fh.write('     ' + uniqueIDField + ' ' + str(x) + '\n')
@@ -2467,14 +2388,12 @@ def section_11_check_lu_beo_dependancies():
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if errorCount>0:
             fh.write("***ERROR --> " + str(errorCount) + " features have status set to INTERNAL that should be EXTERNAL:\n")
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
-          
+            with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
+
             uniqueList.sort()
           
             for x in uniqueList:
@@ -2497,14 +2416,12 @@ def section_11_check_lu_beo_dependancies():
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if errorCount>0:
             fh.write("***ERROR --> " + str(errorCount) + " features have [BIODIVERSITY_EMPHASIS_OPTION] other than Multiple:\n")
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
-          
+            with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
+
             uniqueList.sort()
           
             for x in uniqueList:
@@ -2527,14 +2444,12 @@ def section_11_check_lu_beo_dependancies():
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if errorCount>0:
             fh.write("***ERROR --> " + str(errorCount) + " features have PROVID_PART_NUMBER other than 0:\n")
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
-          
+            with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
+
             uniqueList.sort()
           
             for x in uniqueList:
@@ -2560,14 +2475,12 @@ def section_11_check_lu_beo_dependancies():
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         if errorCount>0:
             fh.write("***ERROR --> " + str(errorCount) + " Internal features have BEO_SUB_TYPE_APPLICABLE set to No:\n")
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
-          
+            with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
+
             uniqueList.sort()
           
             for x in uniqueList:
@@ -2592,14 +2505,12 @@ def section_11_check_lu_beo_dependancies():
             #BUG - High: Raw string literal r"...\n" — the \n is NOT a newline; it is the two characters \ and n.
             #BUG - High: The error message will appear without a line break in the report. Remove the r prefix.
             fh.write("***ERROR --> " + str(errorCount) + r" Internal features have BIODIVERSITY_EMPHASIS_OPTION set to Multiple:\n")
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             uniqueList = []
-            while row:
-                if row.getValue(uniqueIDField) not in uniqueList:
-                    uniqueList.append(row.getValue(uniqueIDField))
-                row = rows.next()
-          
+            with arcpy.da.SearchCursor("fc_lyr", [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        uniqueList.append(row[0])
+
             uniqueList.sort()
           
             for x in uniqueList:
@@ -2623,13 +2534,11 @@ def section_11_check_lu_beo_dependancies():
         #BUG - High: This means if okTest == 0: at line 2463 is NEVER true — "no errors" is never written
         #BUG - High: for this check regardless of actual data state. Move increment inside the error block.
         okTest = okTest + 1
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
         provIDList = []
-        while row:
-            if row.getValue(provIDField) not in provIDList:
-                provIDList.append(row.getValue(provIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in provIDList:
+                    provIDList.append(row[0])
         provIDList.sort()
          
         # For each multi-part PROV_ID, compare LU number and name values across all current parts.
@@ -2638,22 +2547,18 @@ def section_11_check_lu_beo_dependancies():
             selectString = provIDField + " = " + y 
             arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectString)
             if int(str(arcpy.GetCount_management("fc_lyr"))) > 1:
-                rows = arcpy.SearchCursor("fc_lyr")
-                row = rows.next()
                 luNumberList = []
-                while row:
-                    if row.getValue("LANDSCAPE_UNIT_NUMBER") not in luNumberList:
-                        luNumberList.append(row.getValue("LANDSCAPE_UNIT_NUMBER"))
-                    row = rows.next()
+                with arcpy.da.SearchCursor("fc_lyr", ["LANDSCAPE_UNIT_NUMBER"]) as cursor:
+                    for row in cursor:
+                        if row[0] not in luNumberList:
+                            luNumberList.append(row[0])
                 luNumberList.sort()
-                
-                rows = arcpy.SearchCursor("fc_lyr")
-                row = rows.next()
+
                 luNameList = []
-                while row:
-                    if row.getValue("LANDSCAPE_UNIT_NAME") not in luNameList:
-                        luNameList.append(row.getValue("LANDSCAPE_UNIT_NAME"))
-                    row = rows.next()
+                with arcpy.da.SearchCursor("fc_lyr", ["LANDSCAPE_UNIT_NAME"]) as cursor:
+                    for row in cursor:
+                        if row[0] not in luNameList:
+                            luNameList.append(row[0])
                 luNameList.sort()
                 
                 if len(luNumberList) > 1:
@@ -2684,26 +2589,22 @@ def section_11_check_lu_beo_dependancies():
         # Collect all Internal-Current PROV_IDs and check each has a matching External-Current (STATUS=0) partner.
         #read internal-current prov ids into a list & sort
         internalCurrentProvIDList = []
-        rows = arcpy.SearchCursor("fc_lyr")
-        row = rows.next()
         retirementProvIDList = []
-        while row:
-            if row.getValue(provIDField) not in internalCurrentProvIDList:
-                internalCurrentProvIDList.append(row.getValue(provIDField))
-            row = rows.next()
+        with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
+            for row in cursor:
+                if row[0] not in internalCurrentProvIDList:
+                    internalCurrentProvIDList.append(row[0])
         internalCurrentProvIDList.sort()
         
         for x in internalCurrentProvIDList:
             selectionString = "\"" + provIDField + "\" = " + str(x)
             arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
             
-            rows = arcpy.SearchCursor("fc_lyr")
-            row = rows.next()
             statusList = []
-            while row:
-                if row.getValue("STATUS") not in statusList:
-                    statusList.append(row.getValue("STATUS"))
-                row = rows.next()
+            with arcpy.da.SearchCursor("fc_lyr", ["STATUS"]) as cursor:
+                for row in cursor:
+                    if row[0] not in statusList:
+                        statusList.append(row[0])
             statusList.sort()
             
             if 0 not in statusList:
@@ -2778,14 +2679,10 @@ def section_12_check_domains():
         for field in fieldList: 
             if field.domain == domain.name:
                 valueList = []
-                #BUG - Medium: Old-style SearchCursor opened with no del rows. Multiple cursors accumulate
-                #BUG - Medium: across the nested domain/field loop, holding schema locks on the feature class.
-                rows = arcpy.SearchCursor("fc_lyr")
-                row = rows.next()
-                while row:
-                    if row.getValue(field.name) not in valueList:
-                        valueList.append(row.getValue(field.name))
-                    row = rows.next()
+                with arcpy.da.SearchCursor("fc_lyr", [field.name]) as cursor:
+                    for row in cursor:
+                        if row[0] not in valueList:
+                            valueList.append(row[0])
                   
                 # Compare each field value against the domain list; select and report any out-of-domain values.
                 for value in valueList:
@@ -2795,13 +2692,11 @@ def section_12_check_domains():
                         #BUG - Medium: and arcpy raises an exception, skipping all remaining domain checks in this loop.
                         selectQuery = "\"" + str(field.name) + "\" = '" + str(value) + "'"
                         arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", selectQuery)
-                        rows = arcpy.SearchCursor("fc_lyr")
-                        row = rows.next()
                         errorList = []
-                        while row:
-                            if row.getValue("OBJECTID") not in errorList:
-                                errorList.append(row.getValue("OBJECTID"))
-                            row = rows.next()
+                        with arcpy.da.SearchCursor("fc_lyr", ["OBJECTID"]) as cursor:
+                            for row in cursor:
+                                if row[0] not in errorList:
+                                    errorList.append(row[0])
                         errorList.sort()
 
                         for objectID in errorList:
@@ -2834,7 +2729,7 @@ def section_13_check_url_fields():
     '''
 
 
-    import arcpy.da
+    #import arcpy.da
     
     section = '----------Section 13----------'
     arcpy.AddMessage(section)
@@ -2855,14 +2750,14 @@ def section_13_check_url_fields():
     okTest = 0
     
     urlList = []
-    rows = arcpy.SearchCursor('fc_lyr')
-    for row in rows:
-        if row.getValue("ENABLING_DOCUMENT_URL") not in urlList:
-            if row.getValue("ENABLING_DOCUMENT_URL") is None:
-                if "" not in urlList:
-                    urlList.append("")
-            else:
-                urlList.append(row.getValue("ENABLING_DOCUMENT_URL"))
+    with arcpy.da.SearchCursor('fc_lyr', ["ENABLING_DOCUMENT_URL"]) as cursor:
+        for row in cursor:
+            if row[0] not in urlList:
+                if row[0] is None:
+                    if "" not in urlList:
+                        urlList.append("")
+                else:
+                    urlList.append(row[0])
     # Attempt to open each URL; flag any that raise an exception (unreachable or malformed).
     for url in urlList:
         try:
@@ -2870,25 +2765,21 @@ def section_13_check_url_fields():
         except:
             okTest = okTest + 1
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", "\"ENABLING_DOCUMENT_URL\" = '" + url + "'")
-            rows2 = arcpy.SearchCursor('fc_lyr')
             errorList = []
-            for row2 in rows2:
-                #BUG - High: row.getValue("OBJECTID") uses the OUTER cursor variable 'row' (already exhausted),
-                #BUG - High: not the INNER cursor variable 'row2'. Every error entry gets the same wrong OBJECTID.
-                #BUG - High: Fix: change row.getValue("OBJECTID") to row2.getValue("OBJECTID").
-                errorList.append(row.getValue("OBJECTID"))
-            del rows2
-            
+            with arcpy.da.SearchCursor('fc_lyr', ["OBJECTID"]) as cursor2:
+                for row2 in cursor2:
+                    #BUG - High: Original code used the OUTER cursor variable 'row' (already exhausted),
+                    #BUG - High: not the INNER cursor variable 'row2'. Every error entry gets the same wrong OBJECTID.
+                    #BUG - High: Fix: change to row2[0].
+                    errorList.append(row2[0])
+
             for objectID in errorList:
                 fh.write('***ERROR --> OBJECTID ' + str(objectID) + ' does not have a valid URL in [ENABLING_DOCUMENT_URL] \n')
                 okTest = okTest + 1
                 fh.write('\n')
-     
+
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
-    
-    del rows
     
     
     
@@ -2901,32 +2792,28 @@ def section_13_check_url_fields():
     okTest = 0
     
     urlList = []
-    rows = arcpy.SearchCursor('fc_lyr')
-    for row in rows:
-        if row.getValue("RSRCE_PLAN_METADATA_LINK") not in urlList:
-            urlList.append(row.getValue("RSRCE_PLAN_METADATA_LINK"))
+    with arcpy.da.SearchCursor('fc_lyr', ["RSRCE_PLAN_METADATA_LINK"]) as cursor:
+        for row in cursor:
+            if row[0] not in urlList:
+                urlList.append(row[0])
     for url in urlList:
         try:
             urllib.request.urlopen(url)
         except:
             okTest = okTest + 1
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", "\"RSRCE_PLAN_METADATA_LINK\" = '" + url + "'")
-            rows2 = arcpy.SearchCursor('fc_lyr')
             errorList = []
-            for row2 in rows2:
-                errorList.append(row.getValue("OBJECTID"))
-            del rows2
-            
+            with arcpy.da.SearchCursor('fc_lyr', ["OBJECTID"]) as cursor2:
+                for row2 in cursor2:
+                    errorList.append(row2[0])
+
             for objectID in errorList:
                 fh.write('***ERROR --> OBJECTID ' + str(objectID) + ' does not have a valid URL in [RSRCE_PLAN_METADATA_LINK] \n')
                 okTest = okTest + 1
                 fh.write('\n')
-     
+
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
-    
-    del rows
             
             
             
