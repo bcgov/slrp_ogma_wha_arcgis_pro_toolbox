@@ -106,11 +106,11 @@ except:
 # inDataset = r"\\spatialfiles.bcgov\work\srm\wml\workarea\camahood\Data_Management\slrp_issues\strategic_land_resource_plan_bc_Update_20211208_returned_20211214.gdb\slrp_planning_feature_legal_PRG_poly"
 # masterDataset = r"\\spatialfiles.bcgov\work\srm\wml\workarea\camahood\Data_Management\slrp_issues\strategic_land_resource_plan_bc.gdb\slrp_planning_feature_legal_PRG_poly"
 
-# inDataset = r"\\friday\slrp\UpdateWorkarea\Tools\test_wksp\updates\old_growth_management_area_bc_1.gdb\old_growth_management_area_albers\old_growth_management_area_non_legal_bc_poly"
-# masterDataset = r"\\friday\slrp\UpdateWorkarea\Tools\test_wksp\masters\old_growth_management_area_bc_1.gdb\old_growth_management_area_albers\old_growth_management_area_non_legal_bc_poly"
-# 
-#drmRunningTool = True
-####################################################################
+# inDataset = r"\\spatialfiles.bcgov\work\srm\gss\initiatives\slrp_ogma_gar\test_source_data\N_UpdateManagment\OldGrowthManagmentAreas\CurrentUpdate\old_growth_management_area_bc_returned_20260409.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly"
+# masterDataset = r"\\spatialfiles.bcgov\work\srm\gss\initiatives\slrp_ogma_gar\test_source_data\N_UpdateManagment\OldGrowthManagmentAreas\CurrentUpdate\old_growth_management_area_bc_ToReplicate.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly_Main"
+
+# drmRunningTool = True
+# ####################################################################
 
 # Entry point: runs all QA sections in sequence then compacts the geodatabase.
 def main():
@@ -2570,8 +2570,8 @@ def section_11_check_lu_beo_dependancies():
                     fh.write("***ERROR --> CURRENT Landscape Units with [PROVID] " + y + " have multiple values in\n")
                     #BUG - Critical: NameError — 'fileHandlw' is undefined. Should be 'fh'.
                     #BUG - Critical: Script CRASHES here whenever a landscape unit name mismatch is detected.
-                    #BUG - Critical: Fix: replace fileHandlw with fh.
-                    fileHandlw.write("             [LANDSCAPE_UNIT_NAME]\n")
+                    #BUG - Critical: Fix: replace fileHandlw with fh. *Done
+                    fh.write("             [LANDSCAPE_UNIT_NAME]\n")
                     okTest = okTest + 1
         
         if okTest == 0:
