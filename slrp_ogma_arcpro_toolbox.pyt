@@ -15,6 +15,8 @@
 
 import arcpy
 import os
+import sys
+import importlib
 
 
 class Toolbox:
@@ -516,42 +518,36 @@ class AttributeQa(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Attribute QA"
-        self.description = ""
+        self.description = (
+            "Runs a comprehensive attribute quality assurance check on a "
+            "post-update feature class, comparing it against a pre-update "
+            "(master) dataset. Produces a text report listing errors."
+        )
 
     def getParameterInfo(self):
-
-        #This parameter is your first parameter, you can change the name, display name, and data type as needed. 
-        #You can also add more parameters by copying and pasting this code and changing the parameter name, display name, and data type as needed.
-        param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
-            name="param_1",
-            datatype="String",
+        in_dataset = arcpy.Parameter(
+            displayName="Post-Update Feature Class (to check)",
+            name="in_dataset",
+            datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
-        
-        
-        # Second parameter - optional string input
-        param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
-            name="param_2",
-            datatype="String",
-            parameterType="Optional",
-            direction="Input"
-            )
 
-        # Third parameter - example of a feature class input with a filter
-        param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
-            name="param_3",
-            datatype="DEFeatureClass",
-            parameterType="Optional",
-            direction="Input"
-            )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
+        master_dataset = arcpy.Parameter(
+            displayName="Pre-Update (Master) Feature Class",
+            name="master_dataset",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input")
 
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
+        report_file = arcpy.Parameter(
+            displayName="Output Report File",
+            name="report_file",
+            datatype="DEFile",
+            parameterType="Derived",
+            direction="Output")
 
-        return parameters
+        return [in_dataset, master_dataset, report_file]
+
     def isLicensed(self):
         return True
 
@@ -562,7 +558,26 @@ class AttributeQa(object):
         return
 
     def execute(self, parameters, messages):
-        return
+        # Resolve full catalog paths (the QA script derives GDB/folder paths via os.path)
+        in_dataset = arcpy.Describe(parameters[0].value).catalogPath
+        master_dataset = arcpy.Describe(parameters[1].value).catalogPath
+
+        # Ensure the toolbox directory is on sys.path so attribute_qa_v8 can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        # Import and reload to pick up any mid-session edits
+        import attribute_qa_v8
+        importlib.reload(attribute_qa_v8)
+
+        attribute_qa_v8.run(in_dataset, master_dataset)
+
+        # Set the derived output parameter to the report path (clickable in results)
+        report_path = attribute_qa_v8.attributeQAReportFile
+        arcpy.SetParameterAsText(2, report_path)
+        arcpy.AddMessage('')
+        arcpy.AddMessage('Report file: ' + report_path)
 
     def postExecute(self, parameters):
         return

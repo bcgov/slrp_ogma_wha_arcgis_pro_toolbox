@@ -75,6 +75,11 @@ Author: C. Mahood
 Modification: removed "No errors" messages in tool interface as they were being shown even if errors
                 existed and users were then not checking the output text file. Will hopefully 
                 avoid error-filled check-ins coming back to DRMs in the future & reduce confusion.
+
+Date: April 13th, 2026
+Author: C. Sostad
+Modification: Updated whole script from Python 2 and Arc10.8 to Python 3 and Arcgis Pro.
+            Key Changes include: 
 -----------------------------------------------------------------------------------------------
 '''
 
@@ -2842,13 +2847,25 @@ def compact_gdb():
     arcpy.AddMessage('Final step: compacting geodatabase')
     arcpy.Compact_management(gdbPath)
 
-# Run the tool.
-main()
+def run(in_dataset, master_dataset):
+    """Entry point for external callers (e.g. .pyt toolbox)."""
+    global inDataset, masterDataset
+    inDataset = in_dataset
+    masterDataset = master_dataset
+    main()
+    arcpy.AddMessage('')
+    arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
+    arcpy.AddWarning('')
+    arcpy.AddWarning('----------- Review attribute check text file for any errors ------------')
 
-# Print completion messages to the ArcGIS tool dialog.
-arcpy.AddMessage('')
-arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
-arcpy.AddWarning('')
-arcpy.AddWarning('----------- Review attribute check text file for any errors ------------')
+if __name__ == "__main__":
+    # Run the tool.
+    main()
+
+    # Print completion messages to the ArcGIS tool dialog.
+    arcpy.AddMessage('')
+    arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
+    arcpy.AddWarning('')
+    arcpy.AddWarning('----------- Review attribute check text file for any errors ------------')
 
 
