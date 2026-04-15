@@ -1,0 +1,1015 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SLRP QA Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg:      #0d0f12;
+  --bg2:     #13161b;
+  --bg3:     #1a1f27;
+  --bg4:     #222830;
+  --border:  #2a3040;
+  --border2: #384050;
+  --text:    #c8d0dc;
+  --text2:   #7a8899;
+  --text3:   #4a5568;
+  --pass:    #22c55e;
+  --fail:    #ef4444;
+  --warn:    #f59e0b;
+  --info:    #38bdf8;
+  --accent:  #4ade80;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  font-family: 'IBM Plex Sans', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  line-height: 1.5;
+  min-height: 100vh;
+}
+
+code, .mono {
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+/* ── Landing ── */
+#landing {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.landing-logo {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 0.5rem;
+  letter-spacing: 0.05em;
+}
+
+.landing-title {
+  font-size: 1.1rem;
+  color: var(--text2);
+  margin-bottom: 2rem;
+}
+
+.drop-zone {
+  width: 480px;
+  max-width: 90vw;
+  border: 2px dashed var(--border2);
+  border-radius: 12px;
+  padding: 3rem 2rem;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  background: var(--bg2);
+}
+
+.drop-zone:hover,
+.drop-zone.drag-over {
+  border-color: var(--accent);
+  background: var(--bg3);
+}
+
+.drop-zone-icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.drop-zone-text {
+  color: var(--text2);
+  margin-bottom: 1rem;
+}
+
+.drop-zone-hint {
+  font-size: 0.8rem;
+  color: var(--text3);
+}
+
+.file-input-label {
+  display: inline-block;
+  margin-top: 1rem;
+  padding: 0.6rem 1.4rem;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.file-input-label:hover {
+  background: var(--border);
+}
+
+#file-input {
+  display: none;
+}
+
+/* ── Top Bar ── */
+#topbar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  height: 52px;
+  background: var(--bg2);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 1.5rem;
+}
+
+.topbar-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.topbar-logo {
+  font-family: 'IBM Plex Mono', monospace;
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--accent);
+  background: var(--bg4);
+  padding: 0.2rem 0.6rem;
+  border-radius: 4px;
+  letter-spacing: 0.04em;
+}
+
+.topbar-title {
+  font-size: 0.85rem;
+  color: var(--text2);
+}
+
+.topbar-right {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.topbar-filename {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--text3);
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.btn-load {
+  padding: 0.35rem 0.9rem;
+  background: var(--bg4);
+  border: 1px solid var(--border2);
+  border-radius: 4px;
+  color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-load:hover {
+  background: var(--border);
+}
+
+/* ── Dashboard Layout ── */
+#dashboard {
+  display: none;
+}
+
+.dashboard-body {
+  display: grid;
+  grid-template-columns: 1fr 340px;
+  gap: 1.25rem;
+  padding: 1.25rem 1.5rem;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+/* ── Cards ── */
+.card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 1rem 1.25rem;
+}
+
+/* ── Header Card ── */
+.header-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0;
+}
+
+.header-info h1 {
+  font-size: 1.15rem;
+  font-weight: 600;
+  margin-bottom: 0.3rem;
+}
+
+.header-path {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text3);
+  word-break: break-all;
+  margin-bottom: 0.3rem;
+}
+
+.header-meta {
+  font-size: 0.8rem;
+  color: var(--text2);
+}
+
+.badge {
+  display: inline-block;
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.8rem;
+  font-weight: 600;
+  padding: 0.35rem 1rem;
+  border-radius: 4px;
+  letter-spacing: 0.06em;
+}
+
+.badge-pass {
+  background: rgba(34, 197, 94, 0.12);
+  color: var(--pass);
+  border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.badge-fail {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--fail);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+/* ── Stat Row ── */
+.stat-row {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 0.75rem;
+  margin-top: 1.25rem;
+}
+
+.stat-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.75rem 1rem;
+  text-align: center;
+}
+
+.stat-label {
+  font-size: 0.7rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.35rem;
+  font-family: 'IBM Plex Mono', monospace;
+}
+
+.stat-value {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 1.4rem;
+  font-weight: 600;
+}
+
+.stat-positive { color: var(--pass); }
+.stat-negative { color: var(--fail); }
+.stat-neutral  { color: var(--text); }
+.stat-error    { color: var(--fail); }
+
+/* ── Section Grid ── */
+.section-grid-title {
+  font-size: 0.8rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'IBM Plex Mono', monospace;
+  margin-top: 1.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.section-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.65rem;
+}
+
+.section-card {
+  background: var(--bg3);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.7rem 0.9rem;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, transform 0.1s;
+  border-top: 3px solid var(--pass);
+  position: relative;
+}
+
+.section-card:hover {
+  background: var(--bg4);
+  border-color: var(--border2);
+}
+
+.section-card.active {
+  border-color: var(--info);
+  background: var(--bg4);
+}
+
+.section-card.fail {
+  border-top-color: var(--fail);
+}
+
+.section-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 0.25rem;
+}
+
+.section-num {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text3);
+}
+
+.section-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.section-status-dot.pass { background: var(--pass); }
+.section-status-dot.fail { background: var(--fail); }
+
+.section-card-name {
+  font-size: 0.78rem;
+  color: var(--text2);
+  line-height: 1.35;
+}
+
+.section-card-errors {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--fail);
+  margin-top: 0.3rem;
+}
+
+/* ── Detail Panel ── */
+.detail-panel {
+  margin-top: 1.25rem;
+}
+
+.detail-empty {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text3);
+  font-size: 0.85rem;
+}
+
+.detail-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.detail-title .section-num {
+  font-size: 0.75rem;
+}
+
+.check-item {
+  padding: 0.6rem 0.8rem;
+  border-left: 3px solid var(--pass);
+  margin-bottom: 0.5rem;
+  background: var(--bg3);
+  border-radius: 0 4px 4px 0;
+}
+
+.check-item.fail {
+  border-left-color: var(--fail);
+}
+
+.check-header {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.check-icon {
+  font-size: 0.85rem;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.check-icon.pass { color: var(--pass); }
+.check-icon.fail { color: var(--fail); }
+
+.check-rule {
+  font-size: 0.8rem;
+  color: var(--text);
+  line-height: 1.4;
+}
+
+.check-error-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--fail);
+  margin-top: 0.3rem;
+  margin-left: 1.35rem;
+}
+
+.affected-ids {
+  margin-top: 0.4rem;
+  margin-left: 1.35rem;
+  padding: 0.5rem 0.7rem;
+  background: var(--bg);
+  border-radius: 4px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+
+.affected-ids-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: 0.3rem;
+}
+
+.affected-id {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text2);
+  padding: 0.1rem 0;
+}
+
+.passing-summary {
+  font-size: 0.8rem;
+  color: var(--pass);
+  padding: 0.5rem 0.8rem;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+/* ── Sidebar ── */
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.sidebar-title {
+  font-size: 0.72rem;
+  color: var(--text3);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-family: 'IBM Plex Mono', monospace;
+  margin-bottom: 0.6rem;
+}
+
+/* Mod type breakdown */
+.mod-row {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.5rem;
+}
+
+.mod-label {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text2);
+  width: 140px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+.mod-bar-container {
+  flex: 1;
+  height: 14px;
+  background: var(--bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.mod-bar {
+  height: 100%;
+  background: var(--info);
+  border-radius: 3px;
+  transition: width 0.4s ease;
+  min-width: 0;
+}
+
+.mod-count {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--text);
+  width: 40px;
+  text-align: right;
+}
+
+/* Error summary */
+.error-summary-pass {
+  color: var(--pass);
+  font-size: 0.85rem;
+  padding: 0.75rem;
+  text-align: center;
+  background: rgba(34, 197, 94, 0.06);
+  border-radius: 6px;
+  border: 1px solid rgba(34, 197, 94, 0.12);
+}
+
+.error-list {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.error-list-item {
+  padding: 0.45rem 0;
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.error-list-item:last-child {
+  border-bottom: none;
+}
+
+.error-section-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.6rem;
+  color: var(--text3);
+  background: var(--bg);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+.error-rule-text {
+  font-size: 0.75rem;
+  color: var(--text2);
+  line-height: 1.35;
+  flex: 1;
+}
+
+.error-count-tag {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.65rem;
+  color: var(--fail);
+  flex-shrink: 0;
+  margin-top: 0.1rem;
+}
+
+/* Run metadata */
+.meta-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.3rem 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.meta-row:last-child { border-bottom: none; }
+
+.meta-key {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text3);
+}
+
+.meta-val {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text);
+  text-align: right;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: var(--bg); }
+::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- ── Landing State ── -->
+<div id="landing">
+  <div class="landing-logo">SLRP&middot;QA</div>
+  <div class="landing-title">Attribute QA/QC Dashboard</div>
+  <div class="drop-zone" id="drop-zone">
+    <div class="drop-zone-icon">&#128203;</div>
+    <div class="drop-zone-text">Drag &amp; drop a JSON QA report here</div>
+    <div class="drop-zone-hint">Select the .json QA report generated by attribute_qa_v8.py</div>
+    <label class="file-input-label" for="file-input">Load QA Report</label>
+    <input type="file" id="file-input" accept=".json">
+  </div>
+</div>
+
+<!-- ── Dashboard ── -->
+<div id="dashboard">
+  <div id="topbar">
+    <div class="topbar-left">
+      <span class="topbar-logo">SLRP&middot;QA</span>
+      <span class="topbar-title">Attribute QA/QC Dashboard &middot; OGMA Domain</span>
+    </div>
+    <div class="topbar-right">
+      <span class="topbar-filename" id="topbar-filename"></span>
+      <label class="btn-load" for="file-input-2">Load New Report</label>
+      <input type="file" id="file-input-2" accept=".json" style="display:none">
+    </div>
+  </div>
+
+  <div class="dashboard-body">
+    <!-- Main Column -->
+    <div class="main-col">
+      <!-- Header Card -->
+      <div class="card header-card">
+        <div class="header-info">
+          <h1 id="hdr-fc"></h1>
+          <div class="header-path" id="hdr-path"></div>
+          <div class="header-meta" id="hdr-meta"></div>
+        </div>
+        <div id="hdr-badge"></div>
+      </div>
+
+      <!-- Stat Row -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Pre-Update</div>
+          <div class="stat-value stat-neutral" id="stat-pre">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Post-Update</div>
+          <div class="stat-value stat-neutral" id="stat-post">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Net Change</div>
+          <div class="stat-value" id="stat-net">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Total Errors</div>
+          <div class="stat-value" id="stat-errors">-</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Sections Run</div>
+          <div class="stat-value stat-neutral" id="stat-sections">-</div>
+        </div>
+      </div>
+
+      <!-- Section Grid -->
+      <div class="section-grid-title">Sections</div>
+      <div class="section-grid" id="section-grid"></div>
+
+      <!-- Detail Panel -->
+      <div class="card detail-panel" id="detail-panel">
+        <div class="detail-empty">Select a section above to inspect its checks</div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <!-- Mod Type Breakdown -->
+      <div class="card">
+        <div class="sidebar-title">Modification Types</div>
+        <div id="mod-breakdown"></div>
+      </div>
+
+      <!-- Error Summary -->
+      <div class="card">
+        <div class="sidebar-title">Error Summary</div>
+        <div id="error-summary"></div>
+      </div>
+
+      <!-- Run Metadata -->
+      <div class="card">
+        <div class="sidebar-title">Run Metadata</div>
+        <div id="run-meta"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  'use strict';
+
+  // If data was injected by the Python script, auto-render after setup
+  var _preloaded = (typeof PRELOADED_DATA !== 'undefined') ? PRELOADED_DATA : null;
+
+  var landing = document.getElementById('landing');
+  var dashboard = document.getElementById('dashboard');
+  var dropZone = document.getElementById('drop-zone');
+  var fileInput = document.getElementById('file-input');
+  var fileInput2 = document.getElementById('file-input-2');
+
+  // ── File Loading ──
+
+  function handleFile(file) {
+    if (!file) return;
+    var reader = new FileReader();
+    reader.onload = function (e) {
+      try {
+        var data = JSON.parse(e.target.result);
+        renderDashboard(data, file.name);
+      } catch (err) {
+        alert('Failed to parse JSON:\n' + err.message);
+      }
+    };
+    reader.readAsText(file);
+  }
+
+  fileInput.addEventListener('change', function () {
+    if (this.files[0]) handleFile(this.files[0]);
+  });
+
+  fileInput2.addEventListener('change', function () {
+    if (this.files[0]) handleFile(this.files[0]);
+  });
+
+  dropZone.addEventListener('dragover', function (e) {
+    e.preventDefault();
+    dropZone.classList.add('drag-over');
+  });
+
+  dropZone.addEventListener('dragleave', function () {
+    dropZone.classList.remove('drag-over');
+  });
+
+  dropZone.addEventListener('drop', function (e) {
+    e.preventDefault();
+    dropZone.classList.remove('drag-over');
+    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0]);
+  });
+
+  // ── Render Dashboard ──
+
+  function renderDashboard(data, filename) {
+    landing.style.display = 'none';
+    dashboard.style.display = 'block';
+
+    document.getElementById('topbar-filename').textContent = filename || '';
+
+    renderHeader(data.qa_run || {});
+    renderStats(data);
+    renderSectionGrid(data.sections || []);
+    renderSidebar(data);
+
+    // Reset detail panel
+    document.getElementById('detail-panel').innerHTML =
+      '<div class="detail-empty">Select a section above to inspect its checks</div>';
+  }
+
+  // ── Header ──
+
+  function renderHeader(run) {
+    document.getElementById('hdr-fc').textContent = run.feature_class || 'Unknown';
+    document.getElementById('hdr-path').textContent = run.dataset_path || '';
+    document.getElementById('hdr-meta').textContent =
+      (run.run_timestamp || '') + (run.operator_idir ? '  |  ' + run.operator_idir : '');
+
+    var badge = document.getElementById('hdr-badge');
+    var isPassing = run.overall_status === 'PASS';
+    badge.innerHTML = '<span class="badge ' + (isPassing ? 'badge-pass' : 'badge-fail') +
+      '">' + (run.overall_status || 'N/A') + '</span>';
+  }
+
+  // ── Stats ──
+
+  function renderStats(data) {
+    var rc = data.record_counts || {};
+    var run = data.qa_run || {};
+    var sections = data.sections || [];
+
+    document.getElementById('stat-pre').textContent = fmt(rc.pre_update);
+    document.getElementById('stat-post').textContent = fmt(rc.post_update);
+
+    var netEl = document.getElementById('stat-net');
+    var diff = rc.difference || 0;
+    netEl.textContent = (diff > 0 ? '+' : '') + fmt(diff);
+    netEl.className = 'stat-value ' + (diff > 0 ? 'stat-positive' : diff < 0 ? 'stat-negative' : 'stat-neutral');
+
+    var errEl = document.getElementById('stat-errors');
+    var errs = run.total_errors || 0;
+    errEl.textContent = fmt(errs);
+    errEl.className = 'stat-value ' + (errs > 0 ? 'stat-error' : 'stat-neutral');
+
+    document.getElementById('stat-sections').textContent = sections.length;
+  }
+
+  function fmt(n) {
+    if (n === undefined || n === null) return '-';
+    return Number(n).toLocaleString();
+  }
+
+  // ── Section Grid ──
+
+  var allSections = [];
+
+  function renderSectionGrid(sections) {
+    allSections = sections;
+    var grid = document.getElementById('section-grid');
+    grid.innerHTML = '';
+
+    sections.forEach(function (sec, idx) {
+      var card = document.createElement('div');
+      card.className = 'section-card' + (sec.status === 'FAIL' ? ' fail' : '');
+      card.setAttribute('data-idx', idx);
+
+      card.innerHTML =
+        '<div class="section-card-header">' +
+          '<span class="section-num">SEC ' + sec.id + '</span>' +
+          '<span class="section-status-dot ' + (sec.status === 'FAIL' ? 'fail' : 'pass') + '"></span>' +
+        '</div>' +
+        '<div class="section-card-name">' + esc(sec.name) + '</div>' +
+        (sec.errors > 0 ? '<div class="section-card-errors">' + sec.errors + ' error' + (sec.errors !== 1 ? 's' : '') + '</div>' : '');
+
+      card.addEventListener('click', function () {
+        // toggle active
+        var prev = grid.querySelector('.section-card.active');
+        if (prev) prev.classList.remove('active');
+        card.classList.add('active');
+        showSectionDetail(sec);
+      });
+
+      grid.appendChild(card);
+    });
+  }
+
+  // ── Detail Panel ──
+
+  function showSectionDetail(sec) {
+    var panel = document.getElementById('detail-panel');
+    var html = '';
+
+    html += '<div class="detail-title">' +
+      '<span class="section-num">SEC ' + sec.id + '</span> ' +
+      esc(sec.name) +
+      '</div>';
+
+    var allChecks = sec.results || [];
+
+    // Show every check with its rule description
+    allChecks.forEach(function (r) {
+      var isFail = r.status === 'FAIL';
+      html += '<div class="check-item' + (isFail ? ' fail' : '') + '">';
+      html += '<div class="check-header">' +
+        '<span class="check-icon ' + (isFail ? 'fail' : 'pass') + '">' +
+        (isFail ? '&#10007;' : '&#10003;') + '</span>' +
+        '<span class="check-rule">' + esc(r.rule) + '</span>' +
+        '</div>';
+
+      if (isFail) {
+        html += '<div class="check-error-count">' + r.error_count + ' error' + (r.error_count !== 1 ? 's' : '') + '</div>';
+
+        if (r.affected_ids && r.affected_ids.length > 0) {
+          html += '<div class="affected-ids">';
+          html += '<div class="affected-ids-label">Affected IDs (' + r.affected_ids.length + ')</div>';
+          r.affected_ids.forEach(function (id) {
+            html += '<div class="affected-id">' + esc(String(id)) + '</div>';
+          });
+          html += '</div>';
+        }
+      }
+
+      html += '</div>';
+    });
+
+    // Fallback if section has no check entries at all
+    if (allChecks.length === 0) {
+      html += '<div class="check-item">' +
+        '<div class="check-header">' +
+        '<span class="check-icon pass">&#10003;</span>' +
+        '<span class="check-rule">No checks recorded for this section</span>' +
+        '</div></div>';
+    }
+
+    panel.innerHTML = html;
+  }
+
+  // ── Sidebar ──
+
+  function renderSidebar(data) {
+    renderModBreakdown(data.record_counts || {});
+    renderErrorSummary(data);
+    renderRunMeta(data.qa_run || {});
+  }
+
+  function renderModBreakdown(rc) {
+    var container = document.getElementById('mod-breakdown');
+    var types = rc.by_modification_type || {};
+    var keys = Object.keys(types);
+    if (keys.length === 0) {
+      container.innerHTML = '<div style="color:var(--text3);font-size:0.8rem">No data</div>';
+      return;
+    }
+
+    var maxVal = 1;
+    keys.forEach(function (k) { if (types[k] > maxVal) maxVal = types[k]; });
+
+    var html = '';
+    keys.forEach(function (k) {
+      var count = types[k] || 0;
+      var pct = maxVal > 0 ? (count / maxVal * 100) : 0;
+      html += '<div class="mod-row">' +
+        '<span class="mod-label">' + esc(k) + '</span>' +
+        '<div class="mod-bar-container"><div class="mod-bar" style="width:' + pct + '%"></div></div>' +
+        '<span class="mod-count">' + count + '</span>' +
+        '</div>';
+    });
+
+    container.innerHTML = html;
+  }
+
+  function renderErrorSummary(data) {
+    var container = document.getElementById('error-summary');
+    var run = data.qa_run || {};
+    var sections = data.sections || [];
+
+    if ((run.total_errors || 0) === 0) {
+      container.innerHTML = '<div class="error-summary-pass">&#10003; All checks passed cleanly</div>';
+      return;
+    }
+
+    var html = '<div class="error-list">';
+    sections.forEach(function (sec) {
+      var failures = (sec.results || []).filter(function (r) { return r.status === 'FAIL'; });
+      failures.forEach(function (r) {
+        html += '<div class="error-list-item">' +
+          '<span class="error-section-tag">S' + sec.id + '</span>' +
+          '<span class="error-rule-text">' + esc(r.rule) + '</span>' +
+          '<span class="error-count-tag">' + r.error_count + '</span>' +
+          '</div>';
+      });
+    });
+    html += '</div>';
+    container.innerHTML = html;
+  }
+
+  function renderRunMeta(run) {
+    var container = document.getElementById('run-meta');
+    var rows = [
+      ['feature_class', run.feature_class || '-'],
+      ['run_timestamp', run.run_timestamp || '-'],
+      ['script_version', run.script_version || '-'],
+      ['overall_status', run.overall_status || '-'],
+      ['total_checks', run.total_checks || 0],
+      ['total_errors', run.total_errors || 0]
+    ];
+
+    var html = '';
+    rows.forEach(function (r) {
+      html += '<div class="meta-row">' +
+        '<span class="meta-key">' + r[0] + '</span>' +
+        '<span class="meta-val">' + esc(String(r[1])) + '</span>' +
+        '</div>';
+    });
+    container.innerHTML = html;
+  }
+
+  // ── Helpers ──
+
+  function esc(s) {
+    var div = document.createElement('div');
+    div.appendChild(document.createTextNode(s));
+    return div.innerHTML;
+  }
+
+  // Auto-render if data was pre-loaded by the Python script
+  if (_preloaded) {
+    renderDashboard(_preloaded, 'Pre-loaded report');
+  }
+
+})();
+</script>
+</body>
+</html>

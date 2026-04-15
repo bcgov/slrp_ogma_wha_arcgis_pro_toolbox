@@ -117,6 +117,32 @@ except:
 # drmRunningTool = True
 # ####################################################################
 
+def record_section_result(section_id, section_name, checks):
+    """
+    checks is a list of dicts, each with keys:
+        rule        (string)
+        status      ("PASS" or "FAIL")
+        error_count (int)
+        affected_ids (list of strings)
+    """
+    import json
+    section_errors = sum(c["error_count"] for c in checks)
+    section_status = "FAIL" if section_errors > 0 else "PASS"
+
+    qaResults["sections"].append({
+        "id": section_id,
+        "name": section_name,
+        "status": section_status,
+        "checks": len(checks),
+        "errors": section_errors,
+        "results": checks
+    })
+
+    qaResults["qa_run"]["total_checks"] += len(checks)
+    qaResults["qa_run"]["total_errors"] += section_errors
+    if section_errors > 0:
+        qaResults["qa_run"]["overall_status"] = "FAIL"
+
 # Entry point: runs all QA sections in sequence then compacts the geodatabase.
 def main():
     set_global_variables()
@@ -136,6 +162,7 @@ def main():
     section_11_check_lu_beo_dependancies()
     section_12_check_domains()
     ##section_13_check_url_fields()
+    write_json_output()
     compact_gdb()
 
 # Derive all global path variables and dataset-specific field names from the input dataset path.
@@ -205,10 +232,41 @@ def set_global_variables():
     # Build the output report file path: saved in the update folder, named with feature class and today's date.
     global attributeQAReportFile
     attributeQAReportFile = updateFolderPath + "\\" + featClassName + "_attribute_check_"  + str(datetime.date.today())+ ".txt"
-    
+
+    global attributeQAJsonFile
+    attributeQAJsonFile = updateFolderPath + "\\" + featClassName + "_attribute_check_" + str(datetime.date.today()) + ".json"
+
     # Standard "no errors" message string reused across all sections.
     global noErrorsMessage
     noErrorsMessage = '    - No errors found'
+
+    global qaResults
+    qaResults = {
+        "qa_run": {
+            "script_version": "v8",
+            "run_timestamp": str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")),
+            "feature_class": featClassName,
+            "dataset_path": inDataset,
+            "master_path": masterDataset,
+            "overall_status": "PASS",
+            "total_errors": 0,
+            "total_checks": 0
+        },
+        "record_counts": {
+            "pre_update": 0,
+            "post_update": 0,
+            "difference": 0,
+            "by_modification_type": {
+                "NEW": 0,
+                "MODIFIED": 0,
+                "MODIFIED_NOREPLACE": 0,
+                "RETIREMENT": 0,
+                "PERMANENT_RETIREMENT": 0
+            },
+            "count_balance_ok": True
+        },
+        "sections": []
+    }
 
 # Create (overwrite) the output text report file and write the header block.
 def start_text_file():
@@ -299,8 +357,35 @@ def section_0_DRM_checks():
     fh.write("\n")
     fh.write("\n")
     fh.write("\n")
+
+    qaResults["record_counts"]["pre_update"]  = int(masterCount)
+    qaResults["record_counts"]["post_update"] = int(updateCount)
+    qaResults["record_counts"]["difference"]  = masterUpdateDifference
+    qaResults["record_counts"]["by_modification_type"]["MODIFIED"]             = int(modifiedCount)
+    qaResults["record_counts"]["by_modification_type"]["NEW"]                  = int(newCount)
+    qaResults["record_counts"]["by_modification_type"]["RETIREMENT"]           = int(retireCount)
+    qaResults["record_counts"]["by_modification_type"]["PERMANENT_RETIREMENT"] = int(permRetireCount)
+    qaResults["record_counts"]["count_balance_ok"] = (
+        masterUpdateDifference == int(modifiedCount) + int(newCount)
+    )
+
+    record_section_result(0, "Record Count Comparison", [
+        {
+            "rule": "Difference (Post - Pre) equals NEW + MODIFIED count",
+            "status": "PASS" if masterUpdateDifference == int(modifiedCount) + int(newCount) else "FAIL",
+            "error_count": 0 if masterUpdateDifference == int(modifiedCount) + int(newCount) else 1,
+            "affected_ids": []
+        },
+        {
+            "rule": "RETIREMENT count is >= MODIFIED count",
+            "status": "PASS" if int(permRetireCount) + int(retireCount) >= int(modifiedCount) else "FAIL",
+            "error_count": 0 if int(permRetireCount) + int(retireCount) >= int(modifiedCount) else 1,
+            "affected_ids": []
+        }
+    ])
+
     fh.close()
-    
+
     arcpy.AddMessage('    - complete')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -332,6 +417,8 @@ def section_1_check_for_false_nulls():
     arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')
     
     okTest = 0
+    json_s1_string_errors = 0
+    json_s1_string_ids = []
     stringFieldNameList = [f.name for f in arcpy.ListFields('fc_lyr', "", "String")]
     for field in stringFieldNameList:
         selectionString = "\"" + field + "\" in ('<Null>', '<NULL>', 'Null', 'NULL', 'null', '<null>')"
@@ -347,6 +434,10 @@ def section_1_check_for_false_nulls():
             fh.write('***ERROR --> [' + str(uniqueIDField) + '] has ' + str(arcpy.GetCount_management("fc_lyr")) + ' features with <NULL>, <Null>, NULL, or Null as a string instead of a true NULL value: \n')
             for uniqueID in nullErrorList:
                 fh.write('     ' + uniqueIDField + ' ' + str(uniqueID) + ": False Null in " + str(field) + '\n')
+            json_s1_string_errors += badNullCount
+            for uid in nullErrorList:
+                if str(uid) not in json_s1_string_ids:
+                    json_s1_string_ids.append(str(uid))
             okTest = okTest + 1
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
@@ -360,6 +451,8 @@ def section_1_check_for_false_nulls():
     fh.write(message + "\n")
        
     okTest = 0
+    json_s1_numeric_errors = 0
+    json_s1_numeric_ids = []
     numberFieldNameList = [f.name for f in arcpy.ListFields('fc_lyr', "", "Integer")]
     for field in numberFieldNameList:
         selectionString = "\"" + str(field) + "\" is NULL"
@@ -376,14 +469,34 @@ def section_1_check_for_false_nulls():
             
             for uniqueID in nullErrorList:
                 fh.write('     ' + uniqueIDField + ' ' + str(uniqueID) + ": Null in " + str(field) + '\n')
+            json_s1_numeric_errors += badNullCount
+            for uid in nullErrorList:
+                if str(uid) not in json_s1_numeric_ids:
+                    json_s1_numeric_ids.append(str(uid))
             okTest = okTest + 1
 
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
 
     fh.write('\n')
-    fh.write('\n')  
     fh.write('\n')
+    fh.write('\n')
+
+    checks_s1 = []
+    checks_s1.append({
+        "rule": "False nulls in string fields",
+        "status": "PASS" if json_s1_string_errors == 0 else "FAIL",
+        "error_count": json_s1_string_errors,
+        "affected_ids": json_s1_string_ids if json_s1_string_errors > 0 else []
+    })
+    checks_s1.append({
+        "rule": "Nulls in numeric fields",
+        "status": "PASS" if json_s1_numeric_errors == 0 else "FAIL",
+        "error_count": json_s1_numeric_errors,
+        "affected_ids": json_s1_numeric_ids if json_s1_numeric_errors > 0 else []
+    })
+    record_section_result(1, "False and Invalid Null Values", checks_s1)
+
     fh.close()
     
     arcpy.AddMessage('')
@@ -413,10 +526,12 @@ def section_2_check_change_attribute_fields():
     if featClassName == 'landscape_unit_poly':
         statusQueryCurrent = "\"STATUS\" in (0,1)"
         statusQueryRetired = "\"STATUS\" in (2,3)"
-    else: 
+    else:
         statusQueryCurrent = "\"STATUS\" = 0"
         statusQueryRetired = "\"STATUS\" = 1"
-        
+
+    checks_s2 = []
+
     # Check: features flagged NEW, MODIFIED, or MODIFIED_NOREPLACE must not have a retired STATUS.
     ruleMessage = 'RULE TO CHECK: Features with a [MODIFICATION TYPE] of NEW, MODIFIED, or MODIFIED_NOREPLACE must not have [STATUS] set to Retired.'    
     arcpy.AddMessage(ruleMessage)
@@ -426,10 +541,10 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as NEW, MODIFIED, or MODIFIED_NOREPLACE have status\n")
         fh.write("             set as RETIRED: \n")
-        uniqueList = []
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
@@ -439,12 +554,19 @@ def section_2_check_change_attribute_fields():
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "NEW/MODIFIED/MODIFIED_NOREPLACE must not have STATUS=Retired",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: features flagged RETIREMENT or PERMANENT RETIREMENT must not have a current STATUS.
     ruleMessage = 'RULE TO CHECK: Features with a [MODIFICATION TYPE] of RETIREMENT or PERMANENT RETIREMENT must not have [STATUS] set to Current.'    
@@ -455,26 +577,32 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as RETIREMENT or PERMANENT RETIREMENT have status\n")
         fh.write("             set as CURRENT: \n")
-        uniqueList = []
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "RETIREMENT/PERMANENT RETIREMENT must not have STATUS=Current",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: current features must have all four active change management fields populated.
     ruleMessage = 'RULE TO CHECK: Features with a [STATUS] set to Current must have [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON], and [INITIATOR OF CHANGE] filled out.'    
@@ -485,27 +613,33 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
         #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " CURRENT features missing one or more of the following CURRENT change\n")
         fh.write("             management attributes:\n")
         fh.write("             [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON],\n")
-        fh.write("             [INITIATOR_OF_CHANGE]\n")      
-        uniqueList = []
+        fh.write("             [INITIATOR_OF_CHANGE]\n")
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "Current features must have all 4 active change management fields",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: current features must NOT have any retirement change management fields populated.
     ruleMessage = 'RULE TO CHECK: Features with a [STATUS] set to Current must NOT have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
@@ -516,29 +650,35 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " CURRENT features have one or more of the following RETIREMENT change\n")
         fh.write("             management attributes filled in:\n")
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
-        
-        uniqueList = []
+
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
-    else: 
-        fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    else:
+        fh.write(noErrorsMessage + '\n')
+
+    checks_s2.append({
+        "rule": "Current features must NOT have retirement fields populated",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: retired features must have all four retirement change management fields populated.
     ruleMessage = 'RULE TO CHECK: Features with a [STATUS] set to Retired must have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
@@ -549,29 +689,35 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " RETIRED features missing one or more of the following RETIREMENT\n")
         fh.write("             change management attributes:\n")
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
-    
-        uniqueList = []
+
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "Retired features must have all 4 retirement fields",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: NEW or MODIFIED features must have all four active change management fields populated.
     ruleMessage = 'RULE TO CHECK: Features with [MODIFICATION_TYPE] flagged as NEW or MODIFIED must have [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON], and [INITIATOR OF CHANGE] filled out.'    
@@ -581,29 +727,35 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as NEW or MODIFIED missing one or more of the following\n")
         fh.write("             CURRENT change management attributes:\n")
         fh.write("             [GIS_CHANGE_DATE],[GIS_CHANGE_PERSON],[CHANGE_REASON],\n")
         fh.write("             [INITIATOR_OF_CHANGE]\n")
-        
-        uniqueList = []
+
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "NEW/MODIFIED must have all 4 active change management fields",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
+
+    fh.write('\n')
+    arcpy.AddMessage('')
 
     # Check: NEW or MODIFIED features must NOT have any retirement change management fields populated.
     ruleMessage = 'RULE TO CHECK: Features with [MODIFICATION_TYPE] flagged as NEW or MODIFIED must NOT have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
@@ -613,31 +765,37 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
         #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as NEW or MODIFIED features have one or more of the\n")
         fh.write("             following RETIREMENT change management attributes filled in:\n")
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
         fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
-        
-        uniqueList = []
+
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "NEW/MODIFIED must NOT have retirement fields populated",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
 
-    
+    fh.write('\n')
+    arcpy.AddMessage('')
+
+
     # Check: RETIREMENT or PERMANENT RETIREMENT features must have all retirement fields populated.
     ruleMessage = 'RULE TO CHECK: Features with [MODIFICATION_TYPE] flagged as RETIREMENT or PERMANENT_RETIREMENT must have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
     arcpy.AddMessage(ruleMessage)
@@ -649,36 +807,43 @@ def section_2_check_change_attribute_fields():
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
     #if there are any mismatches, get the # and report out on all unique IDs
+    uniqueList = []
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features flagged as RETIREMENT or PERMANENT RETIREMENT missing one\n")
         fh.write("             or more of the following RETIREMENT change management attributes:\n")
         fh.write("             [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],\n")
-        fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")    
-        uniqueList = []
+        fh.write("             [RETIREMENT_REASON],[RETIREMENT_INITIATOR_OF_CHANGE]\n")
         with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
             for row in cursor:
                 if row[0] not in uniqueList:
                     uniqueList.append(row[0])
         uniqueList.sort()
-        
+
         for uniqueID in uniqueList:
             fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
         fh.write('\n')
-    
+
     else:
         fh.write(noErrorsMessage + '\n')
-        
 
-    fh.write('\n') 
-    arcpy.AddMessage('') 
+    checks_s2.append({
+        "rule": "RETIREMENT/PERMANENT RETIREMENT must have all retirement fields",
+        "status": "PASS" if errorCount == 0 else "FAIL",
+        "error_count": errorCount,
+        "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+    })
 
-    
+    fh.write('\n')
+    arcpy.AddMessage('')
+
+
     # Check: IDIR usernames in all four change management person fields must be uppercase.
     ruleMessage = 'RULE TO CHECK: IDIR values in change management attributes must be uppercase.'    
     arcpy.AddMessage(ruleMessage)
     fh.write(ruleMessage + "\n") 
     arcpy.SelectLayerByAttribute_management("fc_lyr", "CLEAR_SELECTION")
     okCount = 0
+    json_s2_idir_ids = []
     gisChangePersonList = []
     initiatorOfChangeList = []
     retirementGISChangePersonList = []
@@ -720,7 +885,10 @@ def section_2_check_change_attribute_fields():
             fh.write('        ' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             okCount = okCount + 1
         fh.write('\n')
-    
+        for uid in uniqueList:
+            if str(uid) not in json_s2_idir_ids:
+                json_s2_idir_ids.append(str(uid))
+
     # Check INITIATOR_OF_CHANGE values for lowercase characters.
     # Checking for uppercase in INITIATOR_OF_CHANGE
     tempList = []
@@ -742,7 +910,10 @@ def section_2_check_change_attribute_fields():
             fh.write('                ' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             okCount = okCount + 1
         fh.write('\n')
-        
+        for uid in uniqueList:
+            if str(uid) not in json_s2_idir_ids:
+                json_s2_idir_ids.append(str(uid))
+
     # Check RETIREMENT_GIS_CHANGE_PERSON values for lowercase characters.
     #Checking for uppercase in RETIREMENT_GIS_CHANGE_PERSON
     tempList = []
@@ -765,7 +936,10 @@ def section_2_check_change_attribute_fields():
             fh.write('                ' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             okCount = okCount + 1
         fh.write('\n')
-    
+        for uid in uniqueList:
+            if str(uid) not in json_s2_idir_ids:
+                json_s2_idir_ids.append(str(uid))
+
     #Checking for uppercase in RETIREMENT_INITIATOR_OF_CHANGE
     # Check RETIREMENT_INITIATOR_OF_CHANGE values for lowercase characters.
     tempList = []
@@ -787,17 +961,28 @@ def section_2_check_change_attribute_fields():
             fh.write('                ' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             okCount = okCount + 1
         fh.write('\n')
-    
-    if okCount == 0: 
+        for uid in uniqueList:
+            if str(uid) not in json_s2_idir_ids:
+                json_s2_idir_ids.append(str(uid))
+
+    if okCount == 0:
         fh.write(noErrorsMessage + '\n')
-          
-  
-    
+
+    checks_s2.append({
+        "rule": "IDIR values must be uppercase",
+        "status": "PASS" if okCount == 0 else "FAIL",
+        "error_count": okCount,
+        "affected_ids": json_s2_idir_ids if okCount > 0 else []
+    })
+
+    record_section_result(2, "Change Management Attributes", checks_s2)
+
+
     fh.write('\n')
     fh.write('\n')
     fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -817,7 +1002,9 @@ def section_3_check_legalization_and_approval_attributes():
     fh.write("CHECK APPROVAL & LEGALIZATION ATTRIBUTES: \n")
     fh.write("-------------------------------------------------------\n")
     fh.write('\n')
-    
+
+    checks_s3 = []
+
     # Branch on feature class name to set the correct date field and query for each dataset type.
     #set up variables based on feature class name:
     if featClassName == 'landscape_unit_poly':
@@ -884,11 +1071,15 @@ def section_3_check_legalization_and_approval_attributes():
         
             else:
                 fh.write(noErrorsMessage + '\n')
-                
-    
-    
-    
-    
+
+            checks_s3.append({
+                "rule": "Legalization/Approval date must be present",
+                "status": "PASS" if errorCount == 0 else "FAIL",
+                "error_count": errorCount,
+                "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+            })
+
+
     # Legal OGMAs only: validate that Act-specific date fields match the value in ASSOCIATED_ACT_NAME.
     #Legal OGMAs only:
     # Check: features with ASSOCIATED_ACT_NAME = 'FRPA and OGAA' must have BOTH date fields populated.
@@ -915,15 +1106,21 @@ def section_3_check_legalization_and_approval_attributes():
             for uniqueID in uniqueList:
                 fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             fh.write('\n')
-        
+
         else:
             fh.write(noErrorsMessage + '\n')
-            
-            
-        fh.write('\n')  
-        arcpy.AddMessage('') 
-        
-        
+
+        checks_s3.append({
+            "rule": "FRPA and OGAA features must have both LEGALIZATION_FRPA_DATE and LEGALIZATION_OGAA_DATE",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
+
+        fh.write('\n')
+        arcpy.AddMessage('')
+
+
         # Check: features with ASSOCIATED_ACT_NAME = 'OGAA' must have LEGALIZATION_OGAA_DATE filled in.
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'OGAA' must have [LEGALIZATION_OGAA_DATE] filled in."
         arcpy.AddMessage(ruleMessage)
@@ -945,14 +1142,20 @@ def section_3_check_legalization_and_approval_attributes():
                  fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             fh.write('\n')
         
-        else: 
+        else:
             fh.write(noErrorsMessage + '\n')
-            
-            
-        fh.write('\n')  
-        arcpy.AddMessage('') 
-        
-        
+
+        checks_s3.append({
+            "rule": "OGAA features must have LEGALIZATION_OGAA_DATE",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
+
+        fh.write('\n')
+        arcpy.AddMessage('')
+
+
         # Check: features with ASSOCIATED_ACT_NAME = 'OGAA' must NOT have LEGALIZATION_FRPA_DATE filled in.
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'OGAA' must have [LEGALIZATION_OGAA DATE] filled in."
         arcpy.AddMessage(ruleMessage)
@@ -977,14 +1180,20 @@ def section_3_check_legalization_and_approval_attributes():
                  fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             fh.write('\n')
         
-        else: 
+        else:
             fh.write(noErrorsMessage + '\n')
-            
-            
-        fh.write('\n')  
-        arcpy.AddMessage('') 
-        
-        
+
+        checks_s3.append({
+            "rule": "OGAA features must NOT have LEGALIZATION_FRPA_DATE",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
+
+        fh.write('\n')
+        arcpy.AddMessage('')
+
+
         # Check: features with ASSOCIATED_ACT_NAME = 'FRPA' must have LEGALIZATION_FRPA_DATE filled in.
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'FRPA' must have [LEGALIZATION_FRPA_DATE] filled in."
         arcpy.AddMessage(ruleMessage)
@@ -1006,14 +1215,20 @@ def section_3_check_legalization_and_approval_attributes():
                  fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
             fh.write('\n')
         
-        else: 
+        else:
             fh.write(noErrorsMessage + '\n')
-            
-            
-        fh.write('\n')  
-        arcpy.AddMessage('') 
-        
-        
+
+        checks_s3.append({
+            "rule": "FRPA features must have LEGALIZATION_FRPA_DATE",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
+
+        fh.write('\n')
+        arcpy.AddMessage('')
+
+
         # Check: features with ASSOCIATED_ACT_NAME = 'FRPA' must NOT have LEGALIZATION_OGAA_DATE filled in.
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'FRPA' must not have [LEGALIZATION_OGAA DATE] filled in."
         arcpy.AddMessage(ruleMessage)
@@ -1039,11 +1254,17 @@ def section_3_check_legalization_and_approval_attributes():
         
         else:
             fh.write(noErrorsMessage + '\n')
-            
-            
-        fh.write('\n')  
-        arcpy.AddMessage('') 
-        
+
+        checks_s3.append({
+            "rule": "FRPA features must NOT have LEGALIZATION_OGAA_DATE",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
+
+        fh.write('\n')
+        arcpy.AddMessage('')
+
     # Both legal and non-legal OGMAs: ASSOCIATED_ACT_NAME must not be null, blank, or a false null string.
     #legal & non-legal ogmas
     if featClassName[:3] == 'old':
@@ -1074,16 +1295,22 @@ def section_3_check_legalization_and_approval_attributes():
         
         else:
             fh.write(noErrorsMessage + '\n')
-            
-    
-    
+
+        checks_s3.append({
+            "rule": "ASSOCIATED_ACT_NAME must not be null or blank",
+            "status": "PASS" if errorCount == 0 else "FAIL",
+            "error_count": errorCount,
+            "affected_ids": [str(x) for x in uniqueList] if errorCount > 0 else []
+        })
 
 
-    fh.write('\n') 
-    fh.write('\n')  
-    fh.write('\n')      
+    record_section_result(3, "Legalization and Approval Attributes", checks_s3)
+
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -1113,16 +1340,17 @@ def section_4_check_for_0_or_null_in_FEATID_and_PROVID():
     selectionString = "\"" + uniqueIDField + "\" = 0 OR \"" + uniqueIDField + "\" IS NULL"
     arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", selectionString)
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
+    json_s4_featid_errors = errorCount
     if errorCount > 0:
         fh.write("***ERROR --> " + str(errorCount) + " features have FEATID that is 0, blank, or NULL.\n")
     else:
         fh.write(noErrorsMessage + '\n')
-        
-    
+
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
-    
+
+
     # Check the provincial ID field for zero or null values.
     #check provID for 0's
     checkMessage = 'RULE TO CHECK: ProvID field must not have any zeroes, blanks, or NULLs.'
@@ -1135,17 +1363,31 @@ def section_4_check_for_0_or_null_in_FEATID_and_PROVID():
         selectionString = "\"" + provIDField + "\" is NULL OR \"" + provIDField + "\" = '' OR \"" + provIDField + "\" = '0'"  
     arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", selectionString)
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
+    json_s4_provid_errors = errorCount
     if errorCount:
         fh.write("***ERROR --> " + str(errorCount) + " features have PROVID that is 0, blank, or NULL.\n")
     # SECTION 5: Check for gaps in the sequential PROV_ID numbering across the dataset.
-    else: 
+    else:
         fh.write(noErrorsMessage + '\n')
-        
 
+    record_section_result(4, "Zero/Null in FEAT_ID and PROV_ID", [
+        {
+            "rule": "Feature ID must not be zero, blank, or NULL",
+            "status": "PASS" if json_s4_featid_errors == 0 else "FAIL",
+            "error_count": json_s4_featid_errors,
+            "affected_ids": []
+        },
+        {
+            "rule": "ProvID must not be zero, blank, or NULL",
+            "status": "PASS" if json_s4_provid_errors == 0 else "FAIL",
+            "error_count": json_s4_provid_errors,
+            "affected_ids": []
+        }
+    ])
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
     
     # OGMA datasets: collect all PROV_IDs, find the range min/max, and flag any missing integers.
@@ -1321,14 +1563,21 @@ def section_5_check_for_gaps_in_PROVID():
         
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
 
+    record_section_result(5, "Gaps in PROV_ID", [
+        {
+            "rule": "ProvID field must not have gaps in sequential numbering",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        }
+    ])
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -1475,14 +1724,21 @@ def section_6_check_for_gaps_in_feature_id():
     
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
 
+    record_section_result(6, "Gaps in Feature ID", [
+        {
+            "rule": "Feature ID field must not have gaps in sequential numbering",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        }
+    ])
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -1609,14 +1865,21 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
                         
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
 
+    record_section_result(7, "Duplicate PROV_ID/PROV_ID_PART_NUMBER", [
+        {
+            "rule": "Current features must have unique PROVID/PROVID_PART_NUMBER combinations",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        }
+    ])
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -1688,19 +1951,26 @@ def section_8_check_for_duplicates_in_featID():
 
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
 
+    record_section_result(8, "Duplicate Feature IDs", [
+        {
+            "rule": "Feature ID values must be unique",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        }
+    ])
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
-    
-    
+
+
 # SECTION 9: Validate PROV_ID pairing rules based on MODIFICATION_TYPE.
 def section_9_check_for_provid_pairs_based_on_mod_type():
     '''
@@ -1714,8 +1984,10 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
     
     fh.write("CHECK FOR PROVID PAIRS BASED ON MODIFICATION TYPE: \n")
     fh.write("-------------------------------------------------------\n")
-    fh.write('\n') 
-      
+    fh.write('\n')
+
+    checks_s9 = []
+
     arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')    
         
         # Collect unique PROV_IDs for each MODIFICATION_TYPE into separate lists for comparison.
@@ -1781,7 +2053,14 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
     fh.write('\n')
     arcpy.AddMessage('')
 
-   
+    checks_s9.append({
+        "rule": "MODIFIED must have matching RETIREMENT PROV_ID",
+        "status": "PASS" if okTest == 0 else "FAIL",
+        "error_count": len(errorProvIDList),
+        "affected_ids": [str(x) for x in errorProvIDList] if len(errorProvIDList) > 0 else []
+    })
+
+
    # RETIREMENT check: every RETIREMENT PROV_ID must have a matching MODIFIED PROV_ID.
    #retirement checks
     checkMessage = 'RULE TO CHECK: If a feature is flagged with a [MODIFICATION_TYPE] of RETIREMENT, there must be another feature with the same PROVID and the [MODIFICATION_TYPE] flagged as MODIFIED.'
@@ -1806,8 +2085,15 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
 
     fh.write('\n')
     arcpy.AddMessage('')
-    
-     
+
+    checks_s9.append({
+        "rule": "RETIREMENT must have matching MODIFIED PROV_ID",
+        "status": "PASS" if okTest == 0 else "FAIL",
+        "error_count": len(errorProvIDList),
+        "affected_ids": [str(x) for x in errorProvIDList] if len(errorProvIDList) > 0 else []
+    })
+
+
     # PERMANENT RETIREMENT checks: PERM RETIRED PROV_IDs must NOT appear under any other mod type.
     #permanent retirement checks
     checkMessage = 'RULE TO CHECK: If a feature is flagged with a [MODIFICATION_TYPE] of PERMANENT RETIREMENT, there must NOT be another feature with the same PROVID and the [MODIFICATION_TYPE] flagged as anything else.'
@@ -1815,6 +2101,8 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
     fh.write(checkMessage + "\n")
      
         #comparing the lists - if permanently retired not have the same provid flagged with another modification type
+    json_s9_permret_errors = 0
+    json_s9_permret_ids = []
             # Sub-check: PERMANENT RETIREMENT vs MODIFIED.
             #perm retirement vs modified
     okTest = 0
@@ -1835,10 +2123,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_permret_errors += len(errorProvIDList)
+    json_s9_permret_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: PERMANENT RETIREMENT vs NEW.
         #perm retirement vs new
     okTest = 0
@@ -1859,10 +2150,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_permret_errors += len(errorProvIDList)
+    json_s9_permret_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: PERMANENT RETIREMENT vs RETIREMENT.
         #perm retirement vs retirement
     okTest = 0
@@ -1883,10 +2177,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_permret_errors += len(errorProvIDList)
+    json_s9_permret_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: PERMANENT RETIREMENT vs MODIFIED_NOREPLACE.
         #perm retirement vs modify no replace
     okTest = 0
@@ -1907,14 +2204,24 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_permret_errors += len(errorProvIDList)
+    json_s9_permret_ids.extend([str(x) for x in errorProvIDList])
+
+    checks_s9.append({
+        "rule": "PERMANENT RETIREMENT must not share PROV_ID with any other modification type",
+        "status": "PASS" if json_s9_permret_errors == 0 else "FAIL",
+        "error_count": json_s9_permret_errors,
+        "affected_ids": json_s9_permret_ids if json_s9_permret_errors > 0 else []
+    })
+
     fh.write('\n')
     arcpy.AddMessage('')
 
     fh.write('\n')
     fh.write('\n')
-     
-     
+
+
     # NEW checks: NEW PROV_IDs must NOT appear under any other modification type.
     #new checks
     checkMessage = 'RULE TO CHECK: If a feature is flagged with a [MODIFICATION_TYPE] of NEW, there must NOT be another feature with the same PROVID and the [MODIFICATION_TYPE] flagged as anything else.'
@@ -1922,6 +2229,8 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
     fh.write(checkMessage + "\n") 
    
         #comparing the lists - if new, must not have the same provid flagged as something else
+    json_s9_new_errors = 0
+    json_s9_new_ids = []
             # Sub-check: NEW vs MODIFIED.
             #new vs modified
     okTest = 0
@@ -1942,10 +2251,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_new_errors += len(errorProvIDList)
+    json_s9_new_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         #new vs perm retirement
     okTest = 0
     errorProvIDList = [i for i in newProvIDList if i in perm_retiredProvIDList]
@@ -1965,10 +2277,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_new_errors += len(errorProvIDList)
+    json_s9_new_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         #new vs retirement
     okTest = 0
     errorProvIDList = [i for i in newProvIDList if i in retiredProvIDList]
@@ -1988,10 +2303,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_new_errors += len(errorProvIDList)
+    json_s9_new_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         #new vs modify no replace
     okTest = 0
     errorProvIDList = [i for i in newProvIDList if i in mod_noreplaceProvIDList]
@@ -2013,14 +2331,24 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_new_errors += len(errorProvIDList)
+    json_s9_new_ids.extend([str(x) for x in errorProvIDList])
+
+    checks_s9.append({
+        "rule": "NEW must not share PROV_ID with any other modification type",
+        "status": "PASS" if json_s9_new_errors == 0 else "FAIL",
+        "error_count": json_s9_new_errors,
+        "affected_ids": json_s9_new_ids if json_s9_new_errors > 0 else []
+    })
+
     fh.write('\n')
     arcpy.AddMessage('')
 
     fh.write('\n')
     fh.write('\n')
-        
-    
+
+
     # MODIFIED_NOREPLACE checks: MODIFIED_NOREPLACE PROV_IDs must NOT appear under any other mod type.
     #modify no replace checks
     checkMessage = 'RULE TO CHECK: If a feature is flagged with a [MODIFICATION_TYPE] of MODIFIED_NOREPLACE, there must NOT be another feature with the same PROVID and a [MODIFICATION_TYPE] flagged as anything else.'
@@ -2028,6 +2356,8 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
     fh.write(checkMessage + "\n") 
     
             #comparing the lists - if modify no replace, must not have the same provid flagged as something else
+    json_s9_modnr_errors = 0
+    json_s9_modnr_ids = []
             # Sub-check: MODIFIED_NOREPLACE vs MODIFIED.
             #modify no replace vs modified
     okTest = 0
@@ -2048,10 +2378,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_modnr_errors += len(errorProvIDList)
+    json_s9_modnr_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: MODIFIED_NOREPLACE vs PERMANENT RETIREMENT.
         #mod_noreplace vs perm retirement
     okTest = 0
@@ -2072,10 +2405,13 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_modnr_errors += len(errorProvIDList)
+    json_s9_modnr_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: MODIFIED_NOREPLACE vs RETIREMENT.
         #MODIFIED_NOREPLACE vs retirement
     okTest = 0
@@ -2096,12 +2432,15 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_modnr_errors += len(errorProvIDList)
+    json_s9_modnr_ids.extend([str(x) for x in errorProvIDList])
+
     fh.write('\n')
     arcpy.AddMessage('')
-    
+
         # Sub-check: MODIFIED_NOREPLACE vs NEW.
-        #modify no replace vs new 
+        #modify no replace vs new
     okTest = 0
     errorProvIDList = [i for i in mod_noreplaceProvIDList if i in newProvIDList]
     if len(errorProvIDList) > 0:
@@ -2120,13 +2459,25 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
  
         for x in errorProvIDList:
                 fh.write('                ' + provIDField + ' ' + str(x) + '\n')
-    
+
+    json_s9_modnr_errors += len(errorProvIDList)
+    json_s9_modnr_ids.extend([str(x) for x in errorProvIDList])
+
+    checks_s9.append({
+        "rule": "MODIFIED_NOREPLACE must not share PROV_ID with any other modification type",
+        "status": "PASS" if json_s9_modnr_errors == 0 else "FAIL",
+        "error_count": json_s9_modnr_errors,
+        "affected_ids": json_s9_modnr_ids if json_s9_modnr_errors > 0 else []
+    })
+
+    record_section_result(9, "PROV_ID Pairs by Modification Type", checks_s9)
+
     fh.write('\n')
     arcpy.AddMessage('')
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
     
     arcpy.AddMessage('')
@@ -2160,7 +2511,10 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
 
     env.workspace = fdsPath
     arcpy.MakeFeatureLayer_management(featClassName, 'fc_lyr')
-    
+
+    json_s10_errors = 0
+    json_s10_ids = []
+
     okTest = 0
     # Collect all distinct MODIFICATION_TYPE values present in the dataset.
     arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"MODIFICATION_TYPE\" is not NULL")
@@ -2197,18 +2551,26 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
                 fh.write('             [MODIFICATION_TYPE] flagged as ' + x + ": \n")            
                 for z in uniqueList:
                     fh.write('                ' + provIDField + ' ' + str(z) + '\n')
+                json_s10_errors += len(uniqueList)
+                json_s10_ids.extend([str(z) for z in uniqueList])
                 okTest = okTest + 1
-    
+
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
-        
 
 
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+    record_section_result(10, "PROV_ID/PART_NUMBER Duplication by Modification Type", [{
+        "rule": "No duplicate PROV_ID/PROVID_PART_NUMBER within same MODIFICATION_TYPE",
+        "status": "PASS" if json_s10_errors == 0 else "FAIL",
+        "error_count": json_s10_errors,
+        "affected_ids": json_s10_ids if json_s10_errors > 0 else []
+    }])
+
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
@@ -2232,9 +2594,11 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
         
         fh.write("CHECK FOR SLRP ID MISMATCHES: \n")
         fh.write("-------------------------------------------------------\n")
-        fh.write('\n') 
-       
-        #For legal & non features, check to see if PROVID [xxx_##_xxx] and SLRP Name are actually in SLRP boundary dataset 
+        fh.write('\n')
+
+        checks_s11a = []
+
+        #For legal & non features, check to see if PROVID [xxx_##_xxx] and SLRP Name are actually in SLRP boundary dataset
  
         env.workspace = fdsPath
         arcpy.MakeFeatureLayer_management(featClassName, 'fc_lyr')
@@ -2300,7 +2664,13 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
     
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
+
+        checks_s11a.append({
+            "rule": "PROV_ID completeness and SLRP boundary existence",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        })
 
 
     # Build a dictionary of current SLRP boundary PROV_IDs mapped to their SLRP plan names.
@@ -2351,17 +2721,25 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
                 
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-    
-    fh.write('\n') 
-    fh.write('\n')     
-    fh.write('\n')   
+
+        checks_s11a.append({
+            "rule": "SLRP Name and PROVID prefix must match boundary dataset",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        })
+
+        record_section_result(11, "SLRP Boundary ID Mismatches", checks_s11a)
+
+    fh.write('\n')
+    fh.write('\n')
+    fh.write('\n')
     fh.close()
-    
+
     arcpy.AddMessage('')
     arcpy.AddMessage('')
     arcpy.AddMessage('')
-      
+
         
 # SECTION 11 (Landscape Units): Validate BEO, status, and multi-part LU consistency rules.
 def section_11_check_lu_beo_dependancies():
@@ -2377,8 +2755,10 @@ def section_11_check_lu_beo_dependancies():
         
         fh.write("CHECK LANDSCAPE UNIT SPECIFIC DEPENDANCIES: \n")
         fh.write("-------------------------------------------------------\n")
-        fh.write('\n') 
-       
+        fh.write('\n')
+
+        checks_s11b = []
+
         # Check: features with PROVID_PART_NUMBER = 0 must have External (not Internal) STATUS.
         #For legal & non features, check to see if PROVID [xxx_##_xxx] and SLRP Name are actually in SLRP boundary dataset 
         checkMessage = 'RULE TO CHECK: Features with [PROVID_PART_NUMBER] = 0 must have [STATUS] set to External-Current or External-Retired.'
@@ -2405,11 +2785,17 @@ def section_11_check_lu_beo_dependancies():
                 fh.write('                ' + uniqueIDField + ' ' + str(x) + '\n')
             fh.write('\n')
             okTest = okTest + 1
-    
+
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "PROVID_PART_NUMBER=0 must have External STATUS",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": errorCount if okTest > 0 else 0,
+            "affected_ids": [str(x) for x in uniqueList] if okTest > 0 else []
+        })
+
         # Check: External features with BEO_SUB_TYPE_APPLICABLE = Yes must have BIODIVERSITY_EMPHASIS_OPTION = Multiple.
         #Check that where status = external, if beo subtype = yes then beo value = multiple
         checkMessage = 'RULE TO CHECK: Features with [STATUS] set to External-Current or External-Retired AND [BEO_SUB_TYPE_APPLICABLE] = Yes must also have [BIODIVERSITY_EMPHASIS_OPTION] set to Multiple'
@@ -2433,11 +2819,17 @@ def section_11_check_lu_beo_dependancies():
                 fh.write('                ' + uniqueIDField + ' ' + str(x) + '\n')
             fh.write('\n')
             okTest = okTest + 1
-         
+
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "External + BEO_SUB_TYPE_APPLICABLE=Yes must have BEO=Multiple",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": errorCount if okTest > 0 else 0,
+            "affected_ids": [str(x) for x in uniqueList] if okTest > 0 else []
+        })
+
         # Check: External features with BEO_SUB_TYPE_APPLICABLE = No must have PROVID_PART_NUMBER = 0.
         #Check that where status = external, if beo subtype = no then provID part number = 0
         checkMessage = 'RULE TO CHECK: Features with [STATUS] set to External-Current or External-Retired AND [BEO_SUB_TYPE_APPLICABLE] = No must have [PROVID_PART_NUMBER] = 0.'
@@ -2467,8 +2859,14 @@ def section_11_check_lu_beo_dependancies():
          
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "External + BEO_SUB_TYPE_APPLICABLE=No must have PROVID_PART_NUMBER=0",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": errorCount if okTest > 0 else 0,
+            "affected_ids": [str(x) for x in uniqueList] if okTest > 0 else []
+        })
+
         # Check: Internal features (STATUS 1 or 3) must have BEO_SUB_TYPE_APPLICABLE = Yes.
         #Check that where status = internal, beo subtype = yes
         checkMessage = 'RULE TO CHECK: Features with [STATUS] set to Internal-Current or Internal-Retired must have [BEO_SUB_TYPE_APPLICABLE] = Yes.'
@@ -2492,11 +2890,17 @@ def section_11_check_lu_beo_dependancies():
                 fh.write('                ' + uniqueIDField + ' ' + str(x) + '\n')
             fh.write('\n')
             okTest = okTest + 1
-         
+
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "Internal features must have BEO_SUB_TYPE_APPLICABLE=Yes",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": errorCount if okTest > 0 else 0,
+            "affected_ids": [str(x) for x in uniqueList] if okTest > 0 else []
+        })
+
         # Check: Internal features with BEO_SUB_TYPE_APPLICABLE = Yes must NOT have BIODIVERSITY_EMPHASIS_OPTION = Multiple.
         #Check that where status = internal and beo subtype = yes, then beo value is not set to multiple
         checkMessage = 'RULE TO CHECK: Features with [STATUS] set to Internal-Current or Internal-Retired AND [BEO_SUB_TYPE_APPLICABLE] = Yes must not have [BIODIVERSITY_EMPHASIS_OPTION] = Multiple.'
@@ -2522,11 +2926,17 @@ def section_11_check_lu_beo_dependancies():
                 fh.write('                ' + uniqueIDField + ' ' + str(x) + '\n')
             fh.write('\n')
             okTest = okTest + 1
-         
+
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "Internal + BEO_SUB_TYPE_APPLICABLE=Yes must not have BEO=Multiple",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": errorCount if okTest > 0 else 0,
+            "affected_ids": [str(x) for x in uniqueList] if okTest > 0 else []
+        })
+
         # Check: if a landscape unit has multiple parts (PROVID_PART_NUMBER > 0), all current parts must share
         #check if lu has more than one part, all CURRENT parts have same lu number, and lu name
         # the same LANDSCAPE_UNIT_NUMBER and LANDSCAPE_UNIT_NAME.
@@ -2581,8 +2991,14 @@ def section_11_check_lu_beo_dependancies():
         
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
-        
+
+        checks_s11b.append({
+            "rule": "Multi-part LU must have consistent LANDSCAPE_UNIT_NUMBER and NAME",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        })
+
         # Check: features with STATUS = Internal-Current must have a matching PROV_ID with STATUS = External-Current.
         #Check that features with a STATUS of Internal-Current have a matching feature with the same PROVID and a STATUS of External-Current
         checkMessage = 'RULE TO CHECK: Features with [STATUS] = Internal-Current must have a matching feeature with the same [LANDSCAPE_UNIT_PROVID] that has a [STATUS] = External-Current.'
@@ -2619,14 +3035,21 @@ def section_11_check_lu_beo_dependancies():
     
         if okTest == 0:
             fh.write(noErrorsMessage + '\n')
-            
 
+        checks_s11b.append({
+            "rule": "Internal-Current must have matching External-Current PROV_ID",
+            "status": "PASS" if okTest == 0 else "FAIL",
+            "error_count": okTest,
+            "affected_ids": []
+        })
 
-        fh.write('\n') 
-        fh.write('\n')     
-        fh.write('\n')   
+        record_section_result(11, "Landscape Unit Dependencies", checks_s11b)
+
+        fh.write('\n')
+        fh.write('\n')
+        fh.write('\n')
         fh.close()
-        
+
         arcpy.AddMessage('')
         arcpy.AddMessage('')
         arcpy.AddMessage('')
@@ -2656,6 +3079,7 @@ def section_12_check_domains():
     # Create a feature layer for attribute selection.
     arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')
     okTest = 0
+    json_s12_error_ids = []
     #Get domain values
     # Retrieve all coded-value domains defined in the geodatabase.
     domains = arcpy.da.ListDomains(gdbPath)
@@ -2706,6 +3130,7 @@ def section_12_check_domains():
 
                         for objectID in errorList:
                             fh.write('***ERROR --> OBJECTID ' + str(objectID) + ' has a non-domain value in [' + field.name + '] \n')
+                            json_s12_error_ids.append(str(objectID))
                             okTest = okTest + 1
                     fh.write('\n')
      
@@ -2713,6 +3138,13 @@ def section_12_check_domains():
         fh.write(noErrorsMessage + '\n')
         
     
+
+    record_section_result(12, "Domain Value Validation", [{
+        "rule": "Field values must be within assigned domain values",
+        "status": "PASS" if okTest == 0 else "FAIL",
+        "error_count": okTest,
+        "affected_ids": json_s12_error_ids if okTest > 0 else []
+    }])
 
 
     fh.write('\n') 
@@ -2842,6 +3274,27 @@ def section_13_check_url_fields():
     arcpy.AddMessage('')
     
 
+def write_json_output():
+    import json
+    import webbrowser
+    fh = open(attributeQAJsonFile, 'w')
+    fh.write(json.dumps(qaResults, indent=2))
+    fh.close()
+    arcpy.AddMessage('JSON output written: ' + attributeQAJsonFile)
+
+    # Generate a self-contained HTML dashboard with data pre-loaded and open it
+    dashboard_template = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qa_dashboard.html')
+    if os.path.exists(dashboard_template):
+        html_report = attributeQAJsonFile.replace('.json', '.html')
+        with open(dashboard_template, 'r') as f:
+            template = f.read()
+        injected = template.replace('</head>',
+            '<script>var PRELOADED_DATA = ' + json.dumps(qaResults, indent=2) + ';</script>\n</head>')
+        with open(html_report, 'w') as f:
+            f.write(injected)
+        arcpy.AddMessage('HTML dashboard written: ' + html_report)
+        webbrowser.open(html_report)
+
 # Final step: compact the geodatabase to reclaim space and optimise performance after edits.
 def compact_gdb():
     arcpy.AddMessage('Final step: compacting geodatabase')
@@ -2857,6 +3310,8 @@ def run(in_dataset, master_dataset):
     arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
     arcpy.AddWarning('')
     arcpy.AddWarning('----------- Review attribute check text file for any errors ------------')
+    arcpy.AddMessage('')
+    arcpy.AddMessage('Report folder: ' + os.path.dirname(attributeQAReportFile))
 
 if __name__ == "__main__":
     # Run the tool.

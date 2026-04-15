@@ -578,6 +578,7 @@ class AttributeQa(object):
         arcpy.SetParameterAsText(2, report_path)
         arcpy.AddMessage('')
         arcpy.AddMessage('Report file: ' + report_path)
+        arcpy.AddMessage('Report folder: ' + os.path.dirname(report_path))
 
     def postExecute(self, parameters):
         return
