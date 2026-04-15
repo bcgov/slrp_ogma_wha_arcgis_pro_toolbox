@@ -723,6 +723,9 @@ code, .mono {
 (function () {
   'use strict';
 
+  // If data was injected by the Python script, auto-render after setup
+  var _preloaded = (typeof PRELOADED_DATA !== 'undefined') ? PRELOADED_DATA : null;
+
   var landing = document.getElementById('landing');
   var dashboard = document.getElementById('dashboard');
   var dropZone = document.getElementById('drop-zone');
@@ -873,44 +876,40 @@ code, .mono {
       esc(sec.name) +
       '</div>';
 
-    var failedRules = sec.results || [];
-    var passCount = sec.checks - failedRules.length;
+    var allChecks = sec.results || [];
 
-    // Show passing summary
-    if (passCount > 0) {
-      html += '<div class="passing-summary">' +
-        '<span style="color:var(--pass)">&#10003;</span> ' +
-        passCount + ' of ' + sec.checks + ' check' + (sec.checks !== 1 ? 's' : '') + ' passed' +
-        '</div>';
-    }
-
-    // Show each failed rule
-    failedRules.forEach(function (r) {
-      html += '<div class="check-item fail">';
+    // Show every check with its rule description
+    allChecks.forEach(function (r) {
+      var isFail = r.status === 'FAIL';
+      html += '<div class="check-item' + (isFail ? ' fail' : '') + '">';
       html += '<div class="check-header">' +
-        '<span class="check-icon fail">&#10007;</span>' +
+        '<span class="check-icon ' + (isFail ? 'fail' : 'pass') + '">' +
+        (isFail ? '&#10007;' : '&#10003;') + '</span>' +
         '<span class="check-rule">' + esc(r.rule) + '</span>' +
         '</div>';
-      html += '<div class="check-error-count">' + r.error_count + ' error' + (r.error_count !== 1 ? 's' : '') + '</div>';
 
-      if (r.affected_ids && r.affected_ids.length > 0) {
-        html += '<div class="affected-ids">';
-        html += '<div class="affected-ids-label">Affected IDs (' + r.affected_ids.length + ')</div>';
-        r.affected_ids.forEach(function (id) {
-          html += '<div class="affected-id">' + esc(String(id)) + '</div>';
-        });
-        html += '</div>';
+      if (isFail) {
+        html += '<div class="check-error-count">' + r.error_count + ' error' + (r.error_count !== 1 ? 's' : '') + '</div>';
+
+        if (r.affected_ids && r.affected_ids.length > 0) {
+          html += '<div class="affected-ids">';
+          html += '<div class="affected-ids-label">Affected IDs (' + r.affected_ids.length + ')</div>';
+          r.affected_ids.forEach(function (id) {
+            html += '<div class="affected-id">' + esc(String(id)) + '</div>';
+          });
+          html += '</div>';
+        }
       }
 
       html += '</div>';
     });
 
-    // If everything passed and no failures
-    if (failedRules.length === 0) {
+    // Fallback if section has no check entries at all
+    if (allChecks.length === 0) {
       html += '<div class="check-item">' +
         '<div class="check-header">' +
         '<span class="check-icon pass">&#10003;</span>' +
-        '<span class="check-rule">All checks passed for this section</span>' +
+        '<span class="check-rule">No checks recorded for this section</span>' +
         '</div></div>';
     }
 
@@ -963,7 +962,7 @@ code, .mono {
 
     var html = '<div class="error-list">';
     sections.forEach(function (sec) {
-      var failures = sec.results || [];
+      var failures = (sec.results || []).filter(function (r) { return r.status === 'FAIL'; });
       failures.forEach(function (r) {
         html += '<div class="error-list-item">' +
           '<span class="error-section-tag">S' + sec.id + '</span>' +
@@ -1003,6 +1002,11 @@ code, .mono {
     var div = document.createElement('div');
     div.appendChild(document.createTextNode(s));
     return div.innerHTML;
+  }
+
+  // Auto-render if data was pre-loaded by the Python script
+  if (_preloaded) {
+    renderDashboard(_preloaded, 'Pre-loaded report');
   }
 
 })();

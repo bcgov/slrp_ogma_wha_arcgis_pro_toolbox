@@ -135,7 +135,7 @@ def record_section_result(section_id, section_name, checks):
         "status": section_status,
         "checks": len(checks),
         "errors": section_errors,
-        "results": [c for c in checks if c["status"] == "FAIL"]
+        "results": checks
     })
 
     qaResults["qa_run"]["total_checks"] += len(checks)
@@ -3276,10 +3276,24 @@ def section_13_check_url_fields():
 
 def write_json_output():
     import json
+    import webbrowser
     fh = open(attributeQAJsonFile, 'w')
     fh.write(json.dumps(qaResults, indent=2))
     fh.close()
     arcpy.AddMessage('JSON output written: ' + attributeQAJsonFile)
+
+    # Generate a self-contained HTML dashboard with data pre-loaded and open it
+    dashboard_template = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qa_dashboard.html')
+    if os.path.exists(dashboard_template):
+        html_report = attributeQAJsonFile.replace('.json', '.html')
+        with open(dashboard_template, 'r') as f:
+            template = f.read()
+        injected = template.replace('</head>',
+            '<script>var PRELOADED_DATA = ' + json.dumps(qaResults, indent=2) + ';</script>\n</head>')
+        with open(html_report, 'w') as f:
+            f.write(injected)
+        arcpy.AddMessage('HTML dashboard written: ' + html_report)
+        webbrowser.open(html_report)
 
 # Final step: compact the geodatabase to reclaim space and optimise performance after edits.
 def compact_gdb():
@@ -3296,6 +3310,8 @@ def run(in_dataset, master_dataset):
     arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
     arcpy.AddWarning('')
     arcpy.AddWarning('----------- Review attribute check text file for any errors ------------')
+    arcpy.AddMessage('')
+    arcpy.AddMessage('Report folder: ' + os.path.dirname(attributeQAReportFile))
 
 if __name__ == "__main__":
     # Run the tool.
