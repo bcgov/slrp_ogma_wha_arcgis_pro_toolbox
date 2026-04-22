@@ -1,0 +1,31 @@
+Analyzing toolbox (\\spatialfiles.bcgov\srm\gss\resources\templates\authorizations\wildlife\slrp_ogma_gar_templates\N\Tools\Toolbox_SLRP_DRM.tbx) for use within ArcGISPro:
+ERROR 000989: Python syntax error: within script tool ChangeDetection(\\friday.idir.bcgov\slrp\UpdateWorkarea\Tools\ToolboxScripts\Chng_Detect_Tool_ver1.27.py)
+WARNING 001683: Found Python 2 to 3 errors: Line 611:     print str(legalPointStagingCountTotal) ->     print(str(legalPointStagingCountTotal))
+Line 654:     print str(legalPointStagingCountTotal) ->     print(str(legalPointStagingCountTotal)) within script tool CompareNumberofRecordsinStagingandBCGW(\\spatialfiles3.bcgov\slrp\UpdateWorkarea\Tools\ToolboxScripts\compare_number_of_records_in_staging_and_lrdw_20200501.py)
+WARNING 001683: Found Python 2 to 3 errors: Line 131:                 for vcode, desc in d1.iteritems(): ->                 for vcode, desc in d1.items():
+Line 136:                 for vcode, desc in d2.iteritems(): ->                 for vcode, desc in d2.items():
+Line 146:                     for key in d1.keys(): ->                     for key in list(d1.keys()):
+Line 147:                         if key in d2.keys(): ->                         if key in list(d2.keys()):
+Line 162:                     outList2 = [key for key in d2.keys() if key not in d1.keys()] ->                     outList2 = [key for key in list(d2.keys()) if key not in list(d1.keys())]
+Line 479:                 for key in df1.keys(): ->                 for key in list(df1.keys()):
+Line 491:                 for key in dicttemp1.keys(): ->                 for key in list(dicttemp1.keys()):
+Line 563:             if Dict2.has_key(key): ->             if key in Dict2:
+Line 584:         if not Dict1.has_key(key): ->         if key not in Dict1:
+Line 700:     print msg ->     print(msg)
+Line 727:     print 'Created 9.3 Scripting Object....' ->     print('Created 9.3 Scripting Object....')
+Line 731:         print 'Created a 9.2 Scripting object' ->         print('Created a 9.2 Scripting object')
+Line 732:         print 'NOTE: this script requires ArcGIS 9.3 functionality to fully run.\n Errors may occur if using 9.2' ->         print('NOTE: this script requires ArcGIS 9.3 functionality to fully run.\n Errors may occur if using 9.2')
+Line 762:         print 'No arguments provided - will check script for hard-coded values' ->         print('No arguments provided - will check script for hard-coded values')
+Line 763:         print '-----------------------------------------\n' ->         print('-----------------------------------------\n')
+Line 829: if desc1.WorkspaceType <> desc2.WorkspaceType: -> if desc1.WorkspaceType != desc2.WorkspaceType:
+Line 855: print "\n...SCRIPT COMPLETE...   elapsed time = " + str(round(elapsedTime / 60, 1)) + " minutes" -> print("\n...SCRIPT COMPLETE...   elapsed time = " + str(round(elapsedTime / 60, 1)) + " minutes") within script tool DataPropertiesQA(\\spatialfiles.bcgov\srm\gss\resources\templates\authorizations\wildlife\slrp_ogma_gar_templates\N\Tools\ToolboxScripts\Compare_FGDB_Properties_v1b_100628.py)
+WARNING 001675: Found REMOVED tool ARC.create within script tool DataPropertiesQA(\\spatialfiles.bcgov\srm\gss\resources\templates\authorizations\wildlife\slrp_ogma_gar_templates\N\Tools\ToolboxScripts::VALIDATE@8)
+WARNING 001683: Found Python 2 to 3 errors: Line 46:     print "no arguments" ->     print("no arguments")
+Line 73: fldobj = enumObj.next() -> fldobj = next(enumObj)
+Line 79: fldObj = enumObj.next() -> fldObj = next(enumObj)
+Line 91:         fldObj = enumObj.next() ->         fldObj = next(enumObj)
+Line 110:     row = rowsObj.next() ->     row = next(rowsObj)
+Line 121:         exec execute_string ->         exec(execute_string)
+Line 123:         if origional_value <> modified_value: ->         if origional_value != modified_value:
+Line 124:                 print "updated " , modified_value ->                 print("updated " , modified_value)
+Line 127:         row=rowsObj.next() ->         row=next(rowsObj) within script tool replace_characters_in_a_field(\\spatialfiles.bcgov\srm\gss\resources\templates\authorizations\wildlife\slrp_ogma_gar_templates\N\Tools\ToolboxScripts\replace_characters.py)
