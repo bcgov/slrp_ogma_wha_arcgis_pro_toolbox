@@ -25,7 +25,7 @@ class Toolbox:
         self.alias = "toolbox"
 
         # List of tool classes associated with this toolbox
-        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, CheckGeom, AttributeQa, CompareNumRecords]  
+        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords]  
        
         # Insert the name of each tool in your toolbox if you have more than one. 
         # i.e. self.tools = [FullSiteOverviewMaps, ExportSiteAndImageryLayout, Amendment]
@@ -494,9 +494,32 @@ class GeometryCheckTool(object):
             )
 
     def execute(self, parameters, messages):
-        import arcpy
-        import os
         from collections import Counter
+
+        arcpy.env.overwriteOutput = True
+
+        in_fc = parameters[0].valueAsText
+
+
+        ##in_fc = r"\\spatialfiles3.bcgov\slrp\UpdateManagement\OldGrowthManagementAreas\CurrentUpdate\old_growth_management_area_bc_Update_20210426_RETURNED_20210518.gdb\old_growth_management_area_albers\old_growth_management_area_non_legal_bc_poly"
+
+        arcpy.AddMessage(f"ArcGIS license level: {arcpy.ProductInfo()}") # This can be removed totally. 
+
+        workspace_path, fc_name = os.path.split(in_fc)
+        arcpy.AddMessage("----- Checking {} -----".format(fc_name))
+
+        desc = arcpy.Describe(in_fc)
+        fc_name = desc.baseName
+        fds_path = os.path.dirname(desc.catalogPath)
+
+        # Validate that the required MODIFICATION_TYPE field exists
+        field_names = [f.name for f in arcpy.ListFields(in_fc)]
+        if "MODIFICATION_TYPE" not in field_names:
+            arcpy.AddError(
+                "The input feature class does not have a MODIFICATION_TYPE field. "
+                "This tool only works with feature classes that have a MODIFICATION_TYPE field **Update this message after further investigation into the appropriate input types."
+            )
+            return
 
         # ---------------- FUNCTIONS ----------------
 
@@ -655,8 +678,14 @@ class GeometryCheckTool(object):
             arcpy.management.Delete(fc_lyr)
             arcpy.management.Delete(temp_lyr)
 
-            def postExecute(self, parameters):
-                return
+        # ---------------- CALL FUNCTIONS ----------------
+        repair_geometry(in_fc, fds_path, fc_name)
+        identify_very_small_polygons_or_line_segments(in_fc, fds_path, fc_name)
+        check_for_max_vertices(in_fc, fds_path, fc_name)
+        check_for_multiple_identical_vertices(in_fc, fds_path, fc_name)
+
+    def postExecute(self, parameters):
+        return
 
 
 class AttributeQa(object):
