@@ -1,23 +1,21 @@
 '''
-Author: Mark McGirr
+Author: Mark McGirr (June 2009)
+
 Purpose: This script updates the values of a field with the next highest sequential number.
         If it is a string field you can enter a string prefix, and it will start adding numbers to the
         new prefix at 1, or to the existing prefix at it's highest value.
          `
-Date: June 2009
-
 Arguments: argv0 = script name (does not need to be passed).  argv1 = enire path to featureclass
            argv2 = field to check for duplicates in
            
 Outputs:
 Dependencies:
 
-
 History:
 ----------------------------------------------------------------------------------------------
-Date:
-Author:
-Modification:
+Date: April 2026
+Author: Sean Parsons
+Modification: Updated script to be compatible with ArcGIS Pro toolbox and Python 3.
 -----------------------------------------------------------------------------------------------
 '''
 import sys, string, os, os.path, win32com.client
@@ -37,7 +35,7 @@ try:
     prefix = sys.argv[3]
     gp.addmessage(prefix)
 except:
-    print "no arguments"
+    print("no arguments")
     
 try:
     is_new_prefix = True
@@ -50,7 +48,7 @@ try:
         #gp.addmessage( "Of course its false")
         is_new_prefix = False 
 except:
-    print "no arguments"
+    print("no arguments")
           
 try:
     just_display_dont_update = True
@@ -64,7 +62,7 @@ try:
         just_display_dont_update = False             
         
 except:
-    print "no arguments"
+    print ("no arguments")
 
 
 
@@ -129,7 +127,7 @@ This section is only relavent for string fields.
 '''
 
 if  selected_field_type == 'String':
-    print "starting into string section"
+    print("starting into string section")
 
 
 
@@ -167,20 +165,20 @@ if  selected_field_type == 'String':
     
         if selected_field_values:
             pig = field_value
-            print "pig   is   " , pig
+            print("pig   is   " , pig)
             numbers_start_at = 0
             hit_the_end_of_suffix_numbers = 'no'
             digits_found = 'no'
             has_suffix = 'yes'  #mmm
-            print len(pig), "length", " hit_the_end_of_suffix_numbers  " ,  hit_the_end_of_suffix_numbers
+            print(len(pig), "length", " hit_the_end_of_suffix_numbers  " ,  hit_the_end_of_suffix_numbers)
             if len(pig) > 0 : 
                 x = len(pig)
-                print "x is " , x
+                print("x is " , x)
                 if pig[(x-1)].isdigit() is False: #mmm
                     hit_the_end_of_suffix_numbers == 'yes-'#mmm
                     has_suffix = 'no'
                 while    hit_the_end_of_suffix_numbers == 'no' and x > 0:
-                    print pig[(x-1)], x
+                    print(pig[(x-1)], x)
                     x = x - 1
                     if pig[(x-1)].isdigit():
                         numbers_start_at = x
@@ -193,9 +191,9 @@ if  selected_field_type == 'String':
                 else:  #mmm
                     this_suffix = 0  #mmm
                     this_prefix = pig
-                print "thisprefix    " , this_prefix  # mmm
-                if prefix_suffix.has_key(this_prefix) == False:
-                    print "adding the prefix   " , this_prefix , "==============================================="
+                print("thisprefix    " , this_prefix)  # mmm
+                if this_prefix not in prefix_suffix:
+                    print("adding the prefix   " , this_prefix , "===============================================")
                     prefix_suffix[this_prefix] = 0
                 if prefix_suffix[this_prefix]< this_suffix :
                     prefix_suffix[this_prefix] = this_suffix
@@ -204,37 +202,37 @@ if  selected_field_type == 'String':
     #sa = set(field_prefix_list)
     #print sa
     
-    for x , y  in prefix_suffix.iteritems():
+    for x , y  in prefix_suffix.items():
         gp.addmessage(str(x) + " has a highest value of   " + str(y) )
-        print x, " has a highest value of   " , y 
+        print(x, " has a highest value of   " , y) 
     
     prefix_error_message = ""
     if is_new_prefix == True:
-        print "is_new_prefix is checked on"
+        print("is_new_prefix is checked on")
         current_highest_sequence_number = 0
-        if prefix_suffix.has_key(prefix) is True:
+        if prefix in prefix_suffix:
               prefix_error_message =  "the prefix already exists"
        
     if is_new_prefix == False:
-        print "is_new_prefix is not checked on"
-        if prefix_suffix.has_key(prefix) is False:
+        print("is_new_prefix is not checked on")
+        if prefix not in prefix_suffix:
               prefix_error_message =  "the prefix does not already exists"
-        if prefix_suffix.has_key(prefix) is True:
-            print "prefix " , prefix
-            print prefix_suffix[prefix]
+        if prefix in prefix_suffix:
+            print("prefix " , prefix)
+            print(prefix_suffix[prefix])
             
             current_highest_sequence_number = prefix_suffix[prefix]
-            print "current_highest_sequence_number" , current_highest_sequence_number
+            print("current_highest_sequence_number" , current_highest_sequence_number)
 
     del row
     del rowsObj
     
     
-    if prefix_error_message <> "":
+    if prefix_error_message != "":
         gp.adderror(prefix_error_message)
         gp.addmessage(" ")
         gp.addmessage(" ")
-        stop
+        exit()
   
     
     # end of finding all the prefix and suffix values
@@ -282,7 +280,7 @@ if  selected_field_type == 'String':
     
 
         
-        print "new_numbers_start_at   " ,    new_numbers_start_at 
+        print("new_numbers_start_at   " ,    new_numbers_start_at) 
         
         
         rowsObj = gp.updatecursor(selected_featureclass)
@@ -298,8 +296,8 @@ if  selected_field_type == 'String':
                 modified_value = prefix + str(new_numbers_start_at)
                 new_numbers_start_at = new_numbers_start_at + 1
                 execute_string = str("row." + selected_field + " = " + '"' +  modified_value + '"')
-                exec execute_string
-                print "updated " , modified_value
+                exec(execute_string)
+                print("updated " , modified_value)
                 rowsObj.UpdateRow(row)
                 
             row=rowsObj.next()
@@ -340,8 +338,8 @@ This section is only relavent for numeric fields.  Just increment to the highest
 
 #########  Get the highest value    ########
 
-if  selected_field_type <> 'String':
-    print "starting into non_string section"
+if  selected_field_type != 'String':
+    print("starting into non_string section")
     selected_field_values = []
 
     #create a cursor and read all records for selected field into a list    
@@ -384,8 +382,8 @@ if  selected_field_type <> 'String':
             if origional_value == 0:
                 highest_number  = highest_number + 1
                 execute_string = str("row." + selected_field + " = " + '"' +  str(highest_number) + '"')
-                print execute_string
-                exec execute_string
+                print(execute_string)
+                exec(execute_string)
                 rowsObj.UpdateRow(row)
                 
             row=rowsObj.next()
