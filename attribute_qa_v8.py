@@ -800,9 +800,6 @@ def section_2_check_change_attribute_fields():
     ruleMessage = 'RULE TO CHECK: Features with [MODIFICATION_TYPE] flagged as RETIREMENT or PERMANENT_RETIREMENT must have [RETIREMENT_DATE],[RETIREMENT_GIS_CHANGE_PERSON],[RETIREMENT_REASON], or [RETIREMENT_INITIATOR_OF_CHANGE] filled out.'    
     arcpy.AddMessage(ruleMessage)
     fh.write(ruleMessage + "\n") 
-    #BUG - High: Query uses 'PERMANENT_RETIREMENT' (underscore) but the actual GDB domain value is
-    #BUG - High: 'PERMANENT RETIREMENT' (space). This IN() clause matches ZERO features — the entire
-    #BUG - High: check is silently skipped for permanently retired features with missing retirement attributes.
     arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"MODIFICATION_TYPE\" IN ('RETIREMENT', 'PERMANENT_RETIREMENT') AND (\"RETIREMENT_DATE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" is null OR \"RETIREMENT_REASON\" is null OR \"RETIREMENT_INITIATOR_OF_CHANGE\" is null OR \"RETIREMENT_GIS_CHANGE_PERSON\" = '' OR \"RETIREMENT_REASON\" = '' OR \"RETIREMENT_INITIATOR_OF_CHANGE\" = '')")
     errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
     
@@ -1090,7 +1087,7 @@ def section_3_check_legalization_and_approval_attributes():
         arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"ASSOCIATED_ACT_NAME\" = 'FRPA and OGAA' AND (\"LEGALIZATION_FRPA_DATE\" is null OR \"LEGALIZATION_OGAA_DATE\" is null OR \"LEGALIZATION_FRPA_DATE\" < date'1920-01-01' OR \"LEGALIZATION_OGAA_DATE\" < date'1920-01-01')")
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
-        #BUG - Low: Debug print statement left in production code. Python 3 syntax error if script is ported.
+
         print('cow', errorCount)
         
             #if there are any mismatches, get the # and report out on all unique IDs
@@ -1160,9 +1157,6 @@ def section_3_check_legalization_and_approval_attributes():
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'OGAA' must have [LEGALIZATION_OGAA DATE] filled in."
         arcpy.AddMessage(ruleMessage)
         fh.write(ruleMessage + "\n")
-        #BUG - High: Logic error — IS NOT NULL OR > should be IS NOT NULL AND >.
-        #BUG - High: A null FRPA_DATE satisfies neither sub-condition but OR means a null value
-        #BUG - High: with date < 1920 may still pass. FRPA contamination on OGAA-only features may be missed.
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"ASSOCIATED_ACT_NAME\" = 'OGAA' AND (\"LEGALIZATION_FRPA_DATE\" is not null OR \"LEGALIZATION_FRPA_DATE\" > date'1920-01-01')")
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         
@@ -1233,8 +1227,6 @@ def section_3_check_legalization_and_approval_attributes():
         ruleMessage = "RULE TO CHECK: Features with [ASSOCIATED_ACT_NAME] = 'FRPA' must not have [LEGALIZATION_OGAA DATE] filled in."
         arcpy.AddMessage(ruleMessage)
         fh.write(ruleMessage + "\n")
-        #BUG - High: Same IS NOT NULL OR > logic error as line 919, but for OGAA date on FRPA-only features.
-        #BUG - High: OGAA date contamination on FRPA-only features may not be caught.
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"ASSOCIATED_ACT_NAME\" = 'FRPA' AND (\"LEGALIZATION_OGAA_DATE\" is not null OR \"LEGALIZATION_OGAA_DATE\" > date'1920-01-01')")
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         
@@ -1277,6 +1269,23 @@ def section_3_check_legalization_and_approval_attributes():
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         
             #if there are any mismatches, get the # and report out on all unique IDs
+        if errorCount > 0:
+            fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
+            uniqueList = []
+            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+                for row in cursor:
+                    if row[0] not in uniqueList:
+                        #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
+                        #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
+                        #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
+                        uniqueList.append(uniqueIDField)
+            uniqueList.sort()
+            
+            for uniqueID in uniqueList:
+                 fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
+            fh.write('\n')
+
+                        #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
             fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
             uniqueList = []
@@ -1940,8 +1949,6 @@ def section_8_check_for_duplicates_in_featID():
     okTest = 0        
     for y in featIDList:
         c = featIDList.count(y)
-        #BUG - Low: Chained comparison "c > 1 == True" evaluates as (c > 1) and (1 == True).
-        #BUG - Low: Works in Python 2/3 because 1 == True, but is misleading. Should be: if c > 1:
         if c > 1 == True:
             if featClassName[:3] == 'old':
                 fh.write('***ERROR --> OGMA_INTERNAL_ID Duplicate: ' +  str(y) + ' is a duplicate \n') 
@@ -2983,9 +2990,6 @@ def section_11_check_lu_beo_dependancies():
                 
                 if len(luNameList) > 1:
                     fh.write("***ERROR --> CURRENT Landscape Units with [PROVID] " + y + " have multiple values in\n")
-                    #BUG - Critical: NameError — 'fileHandlw' is undefined. Should be 'fh'.
-                    #BUG - Critical: Script CRASHES here whenever a landscape unit name mismatch is detected.
-                    #BUG - Critical: Fix: replace fileHandlw with fh. *Done
                     fh.write("             [LANDSCAPE_UNIT_NAME]\n")
                     okTest = okTest + 1
         
@@ -3089,8 +3093,6 @@ def section_12_check_domains():
         codedValueList = []
         if domain.domainType == 'CodedValue':
             coded_values = domain.codedValues
-            #BUG - Medium: .iteritems() is Python 2 only. Python 3 / ArcGIS Pro requires .items().
-            #BUG - Medium: This will raise AttributeError immediately on any Python 3 environment.
             for val in coded_values.items():
                 domainValLists.append(val)
             for domainValList in domainValLists:
@@ -3205,9 +3207,6 @@ def section_13_check_url_fields():
             errorList = []
             with arcpy.da.SearchCursor('fc_lyr', ["OBJECTID"]) as cursor2:
                 for row2 in cursor2:
-                    #BUG - High: Original code used the OUTER cursor variable 'row' (already exhausted),
-                    #BUG - High: not the INNER cursor variable 'row2'. Every error entry gets the same wrong OBJECTID.
-                    #BUG - High: Fix: change to row2[0].
                     errorList.append(row2[0])
 
             for objectID in errorList:
