@@ -1268,22 +1268,29 @@ def section_3_check_legalization_and_approval_attributes():
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"ASSOCIATED_ACT_NAME\" in ('', ' ', 'NULL','Null','null','<NULL>','<Null>','<null>') OR \"ASSOCIATED_ACT_NAME\" is null")
         errorCount = int(str(arcpy.GetCount_management('fc_lyr')))
         
-            #if there are any mismatches, get the # and report out on all unique IDs
-        if errorCount > 0:
-            fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
-            uniqueList = []
-            with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
-                for row in cursor:
-                    if row[0] not in uniqueList:
-                        #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
-                        #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
-                        #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
-                        uniqueList.append(uniqueIDField)
-            uniqueList.sort()
+
+        # ORIGINAL SCRIPT WITH ERROR
+        '''
+        So instead of building a list like [12345, 67890, 99001], the list becomes ['NON_LEGAL_OGMA_INTERNAL_ID']
+          — it only ever contains one entry because after the first append, the string is already in uniqueList and the if row[0] not in uniqueList guard... 
+          actually doesn't prevent it since it checks row[0] (a number) against the string. So uniqueList ends up with one entry per row — but they're all the same field name string repeated.
+        '''
+        #     #if there are any mismatches, get the # and report out on all unique IDs
+        # if errorCount > 0:
+        #     fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
+        #     uniqueList = []
+        #     with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
+        #         for row in cursor:
+        #             if row[0] not in uniqueList:
+        #                 #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
+        #                 #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
+        #                 #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
+        #                 uniqueList.append(uniqueIDField)
+        #     uniqueList.sort()
             
-            for uniqueID in uniqueList:
-                 fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
-            fh.write('\n')
+        #     for uniqueID in uniqueList:
+        #          fh.write('                *' + uniqueIDField + ' ' + str(uniqueID) + '\n')
+        #     fh.write('\n')
 
                         #if there are any mismatches, get the # and report out on all unique IDs
         if errorCount > 0:
@@ -1292,10 +1299,7 @@ def section_3_check_legalization_and_approval_attributes():
             with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
                 for row in cursor:
                     if row[0] not in uniqueList:
-                        #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
-                        #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
-                        #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
-                        uniqueList.append(uniqueIDField)
+                        uniqueList.append(row[0])
             uniqueList.sort()
             
             for uniqueID in uniqueList:
