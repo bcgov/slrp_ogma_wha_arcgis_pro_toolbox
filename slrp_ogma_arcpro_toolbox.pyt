@@ -564,7 +564,7 @@ class GeometryCheckTool(object):
                 count = int(arcpy.management.GetCount(temp_lyr)[0])
 
                 if count > 0:
-                    arcpy.AddWarning(f"{count} small polygon features found.")
+                    arcpy.AddWarning(f"{count} small polygon features detected (<= 0.5 ha).")
                     arcpy.AddWarning(f"Review: temp_sliver_polygons_{fc_name}")
                 else:
                     arcpy.AddMessage("No sliver polygons found.")
@@ -588,10 +588,10 @@ class GeometryCheckTool(object):
                 arcpy.management.DeleteFeatures(temp_lyr)
                 arcpy.management.SelectLayerByAttribute(temp_lyr, "CLEAR_SELECTION")
 
-                count = int(arcpy.management.GetCount(temp_lyr)[0])
+                short_segment_count = int(arcpy.management.GetCount(temp_lyr)[0])
 
-                if count > 0:
-                    arcpy.AddWarning(f"{count} short line segments found.")
+                if short_segment_count > 0:
+                    arcpy.AddWarning(f"{count} short line segments found (< 1 meter).")
                     arcpy.AddWarning(f"Review: temp_short_line_segments_{fc_name}")
                 else:
                     arcpy.AddMessage("No short segments found.")
@@ -599,6 +599,8 @@ class GeometryCheckTool(object):
                 arcpy.management.Delete(temp_lyr)
 
             arcpy.management.Delete(fc_lyr)
+
+            arcpy.AddMessage("----- Check complete -----")
 
 
         def check_for_max_vertices(in_fc, fds_path, fc_name):
@@ -629,20 +631,29 @@ class GeometryCheckTool(object):
 
 
         def check_for_multiple_identical_vertices(in_fc, fds_path, fc_name):
-            arcpy.AddMessage("Checking for duplicate vertices (>=4)...")
+            arcpy.AddMessage("Checking for identical vertices (>= 4) in modified features...")
+            arcpy.AddMessage("Features with 4+ identical vertices will not load to BCGW.")
+
+            where_clause = "MODIFICATION_TYPE IS NOT NULL"
 
             fc_lyr = arcpy.CreateUniqueName("fc_lyr")
-            arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, "MODIFICATION_TYPE IS NOT NULL")
+            arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, where_clause)
 
+            # Step 1: Copy features
             temp_fc1 = os.path.join(fds_path, f"temp_identical_vertex_check_Step1_{fc_name}")
             temp_fc2 = os.path.join(fds_path, f"temp_identical_vertex_check_Step2_{fc_name}")
 
             if arcpy.Exists(temp_fc1):
                 arcpy.management.Delete(temp_fc1)
 
+            arcpy.AddMessage(" - Creating temp dataset of modified features")
             arcpy.management.CopyFeatures(fc_lyr, temp_fc1)
+
+            # Step 2: Convert to points
+            arcpy.AddMessage(" - Converting features to vertices")
             arcpy.management.FeatureVerticesToPoints(temp_fc1, temp_fc2, "ALL")
 
+            # Step 3: Add XY + fields
             arcpy.management.AddXY(temp_fc2)
             arcpy.management.AddField(temp_fc2, "CHECK", "TEXT", field_length=100)
             arcpy.management.AddField(temp_fc2, "FLAG", "TEXT")
@@ -650,22 +661,49 @@ class GeometryCheckTool(object):
             temp_lyr = arcpy.CreateUniqueName("temp_lyr")
             arcpy.management.MakeFeatureLayer(temp_fc2, temp_lyr)
 
-            feat_id_field = "OBJECTID"  # safe fallback
+            # Determine ID field
+            if 'slrp' in fc_name:
+                if 'boundary' in fc_name:
+                    feat_id_field = "STRGC_LAND_RSRCE_PLAN_ID"
+                elif 'non' in fc_name:
+                    feat_id_field = "NON_LEGAL_FEAT_ID"
+                else:
+                    feat_id_field = "LEGAL_FEAT_ID"
+            elif 'landscape' in fc_name:
+                feat_id_field = "LANDSCAPE_UNIT_ID"
+            elif 'old_growth' in fc_name:
+                if 'non' in fc_name:
+                    feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
+                else:
+                    feat_id_field = "LEGAL_OGMA_INTERNAL_ID"
+            else:
+                raise ValueError("Could not determine feature ID field.")
 
+            # Step 4: Calculate CHECK field
             calc_expr = f"str(!{feat_id_field}!) + '_' + str(!POINT_X!) + '_' + str(!POINT_Y!)"
             arcpy.management.CalculateField(temp_lyr, "CHECK", calc_expr, "PYTHON3")
 
+            
+            # Step 5: Use modern cursor (FAST)
+            arcpy.AddMessage(" - Analyzing vertex duplication")
+            from collections import Counter
+            
             with arcpy.da.SearchCursor(temp_lyr, ["CHECK"]) as cursor:
                 values = [row[0] for row in cursor]
 
             counts = Counter(values)
-            flagged = [k for k, v in counts.items() if v > 3]
+            flagged_points = [k for k, v in counts.items() if v > 3]
 
-            for val in flagged:
-                arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", f"CHECK = '{val}'")
-                cnt = int(arcpy.management.GetCount(temp_lyr)[0])
-                arcpy.management.CalculateField(temp_lyr, "FLAG", f'"{cnt}"', "PYTHON3")
+            # Step 6: Flag duplicates
+            for flagged_point in flagged_points:
+                where = f"CHECK = '{flagged_point}'"
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", where)
 
+                count = int(arcpy.management.GetCount(temp_lyr)[0])
+                arcpy.management.CalculateField(temp_lyr, "FLAG", str(count), "PYTHON3")
+                
+
+            # Step 7: Keep only flagged
             arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", "FLAG IS NULL")
             arcpy.management.DeleteFeatures(temp_lyr)
 
