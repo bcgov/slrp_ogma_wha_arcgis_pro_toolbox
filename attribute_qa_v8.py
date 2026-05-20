@@ -1039,9 +1039,9 @@ def section_3_check_legalization_and_approval_attributes():
         fh.write(ruleMessage + "\n")
 
         #BUG - High: SQL operator precedence error. AND binds tighter than OR, so the query evaluates as:
-        #BUG - High: (PLAN_STATUS='Approved' AND APPROVAL_DATE is null) OR (APPROVAL_DATE < date'1900-01-01').
-        #BUG - High: The second condition has no PLAN_STATUS guard — non-Approved features with pre-1900 dates
-        #BUG - High: produce false positives. Fix: wrap the OR in parentheses.
+        # - High: (PLAN_STATUS='Approved' AND APPROVAL_DATE is null) OR (APPROVAL_DATE < date'1900-01-01').
+        # - High: The second condition has no PLAN_STATUS guard — non-Approved features with pre-1900 dates
+        # - High: produce false positives. Fix: wrap the OR in parentheses.
         selectQuery = "\"PLAN_STATUS\" = 'Approved' AND \"APPROVAL_DATE\" is null or \"APPROVAL_DATE\" < date'1900-01-01'"
         fieldName = "[APPROVAL_DATE]"
        
@@ -1275,16 +1275,22 @@ def section_3_check_legalization_and_approval_attributes():
           — it only ever contains one entry because after the first append, the string is already in uniqueList and the if row[0] not in uniqueList guard... 
           actually doesn't prevent it since it checks row[0] (a number) against the string. So uniqueList ends up with one entry per row — but they're all the same field name string repeated.
         '''
-        #     #if there are any mismatches, get the # and report out on all unique IDs
+        # FIXED
+        # ORIGINAL: If there are any errors, report how many errors there are and then open a search cursor, iterate over the uniqueIDField, 
+        # Read the value of uniqueIDField for each row, and if that value is not already in uniqueList, append it to uniqueList. 
+        # Then sort uniqueList and report out the unique IDs.
+        # CHANGE:   Fixed the issue where the uniqueList was being populated with the field name string instead of the actual values. Now it correctly appends the value of uniqueIDField for each row.
+        # RISK:     If this change is incorrect, the report will not show the unique ID's making tracking them down difficult
+        # DOWNSTREAM: The checks_s3 list and the error reporting section depend on this change.
+
+
         # if errorCount > 0:
         #     fh.write("***ERROR --> " + str(errorCount) + " features have a blank, null, or false null [ASSOCIATED_ACT_NAME]\n")  
         #     uniqueList = []
         #     with arcpy.da.SearchCursor('fc_lyr', [uniqueIDField]) as cursor:
         #         for row in cursor:
         #             if row[0] not in uniqueList:
-        #                 #BUG - High: uniqueList.append(uniqueIDField) appends the field NAME string (e.g. 'NON_LEGAL_OGMA_INTERNAL_ID')
-        #                 #BUG - High: instead of row[0]. Fix: uniqueList.append(row[0]).
-        #                 #BUG - High: The error count is correct but affected feature IDs cannot be identified from the report.
+
         #                 uniqueList.append(uniqueIDField)
         #     uniqueList.sort()
             
@@ -1829,11 +1835,14 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
         otherOGMAfc = 'old_growth_management_area_legal_bc_poly'
         otherPROVID = "LEGAL_OGMA_PROVID"
 
-
+        # Select features set to CURRENT
         arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", statusQuery)
         fcProvIDList = []
         currentCount = int(str(arcpy.GetCount_management('fc_lyr')))
+        # If there are 1 or more records set to CURRENT
         if currentCount> 0:
+            # Open a search cursor, search through the 2 fields, and assign the ProvID and ProvID Partnum to a and b and then combine them and 
+            # with xxxxx in the middle to allow unsplitting later append it to the fcProvIDList
             with arcpy.da.SearchCursor("fc_lyr", [provIDField, provIDPartNum]) as cursor:
                 for row in cursor:
                     a = row[0]
@@ -1845,9 +1854,7 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
         #now read the other ogma feature class (legal or non legal) provid/part #'s into the same list
         arcpy.MakeFeatureLayer_management(otherOGMAfc, "other_ogma_lyr")
         arcpy.SelectLayerByAttribute_management("other_ogma_lyr", "NEW_SELECTION", statusQuery)
-        #BUG - High: arcpy.GetCount_management('fc_lyr') checks the PRIMARY layer count, not 'other_ogma_lyr'.
-        #BUG - High: If the primary layer has zero current features, the other OGMA layer is never read.
-        #BUG - High: Fix: change 'fc_lyr' to 'other_ogma_lyr' to guard the correct layer.
+
         currentCount = int(str(arcpy.GetCount_management('fc_lyr')))
 
         if currentCount > 0:
@@ -2958,7 +2965,7 @@ def section_11_check_lu_beo_dependancies():
         arcpy.SelectLayerByAttribute_management("fc_lyr", "NEW_SELECTION", "\"PROVID_PART_NUMBER\" > 0 AND \"STATUS\" in (0,1)")
         #BUG - High: okTest is incremented unconditionally here, before any error check.
         #BUG - High: This means if okTest == 0: at line 2463 is NEVER true — "no errors" is never written
-        #BUG - High: for this check regardless of actual data state. Move increment inside the error block.
+        s#BUG - High: for this check regardless of actual data state. Move increment inside the error block.
         okTest = okTest + 1
         provIDList = []
         with arcpy.da.SearchCursor("fc_lyr", [provIDField]) as cursor:
