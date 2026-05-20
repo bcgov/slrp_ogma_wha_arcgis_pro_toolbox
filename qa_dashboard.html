@@ -476,6 +476,28 @@ code, .mono {
   gap: 0.4rem;
 }
 
+/* ── TXT-Style Report Panel ── */
+.txt-report {
+  font-family: 'IBM Plex Mono', monospace;
+  font-size: 0.78rem;
+  line-height: 1.65;
+  white-space: pre;
+  background: var(--bg);
+  border-radius: 6px;
+  padding: 1rem 1.25rem;
+  overflow-x: auto;
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+.txt-section-header { color: var(--text3); }
+.txt-rule           { color: var(--text2); font-style: italic; }
+.txt-pass           { color: var(--pass); }
+.txt-error          { color: var(--fail); font-weight: 600; }
+.txt-id             { color: var(--text2); }
+.txt-dim            { color: var(--text3); }
+.txt-count-label    { color: var(--text); }
+.txt-count-value    { color: var(--info); }
+
 /* ── Sidebar ── */
 .sidebar {
   display: flex;
@@ -781,7 +803,7 @@ code, .mono {
 
     renderHeader(data.qa_run || {});
     renderStats(data);
-    renderSectionGrid(data.sections || []);
+    renderSectionGrid(data.sections || [], data);
     renderSidebar(data);
 
     // Reset detail panel
@@ -835,7 +857,7 @@ code, .mono {
 
   var allSections = [];
 
-  function renderSectionGrid(sections) {
+  function renderSectionGrid(sections, data) {
     allSections = sections;
     var grid = document.getElementById('section-grid');
     grid.innerHTML = '';
@@ -858,7 +880,7 @@ code, .mono {
         var prev = grid.querySelector('.section-card.active');
         if (prev) prev.classList.remove('active');
         card.classList.add('active');
-        showSectionDetail(sec);
+        showSectionDetail(sec, data);
       });
 
       grid.appendChild(card);
@@ -867,53 +889,129 @@ code, .mono {
 
   // ── Detail Panel ──
 
-  function showSectionDetail(sec) {
-    var panel = document.getElementById('detail-panel');
-    var html = '';
+  // Pad a string to at least n characters wide with trailing spaces.
+  function padRight(s, n) {
+    s = String(s);
+    while (s.length < n) { s += ' '; }
+    return s;
+  }
 
-    html += '<div class="detail-title">' +
-      '<span class="section-num">SEC ' + sec.id + '</span> ' +
-      esc(sec.name) +
-      '</div>';
+  // Wrap content in a coloured <span>.  esc() is called on the raw text.
+  function txtSpan(cls, raw) {
+    return '<span class="' + cls + '">' + esc(String(raw)) + '</span>';
+  }
 
-    var allChecks = sec.results || [];
+  // Build the Section 0 record-count table lines from data.record_counts.
+  function buildSection0Lines(data) {
+    var rc  = data.record_counts || {};
+    var bm  = rc.by_modification_type || {};
+    var pre  = rc.pre_update  !== undefined ? rc.pre_update  : 0;
+    var post = rc.post_update !== undefined ? rc.post_update : 0;
+    var diff = rc.difference  !== undefined ? rc.difference  : 0;
+    var mod  = bm.MODIFIED             || 0;
+    var nw   = bm.NEW                  || 0;
+    var ret  = bm.RETIREMENT           || 0;
+    var pret = bm.PERMANENT_RETIREMENT || 0;
+    var totalNewMod = mod + nw;
+    var totalRet    = pret + ret;
 
-    // Show every check with its rule description
-    allChecks.forEach(function (r) {
-      var isFail = r.status === 'FAIL';
-      html += '<div class="check-item' + (isFail ? ' fail' : '') + '">';
-      html += '<div class="check-header">' +
-        '<span class="check-icon ' + (isFail ? 'fail' : 'pass') + '">' +
-        (isFail ? '&#10007;' : '&#10003;') + '</span>' +
-        '<span class="check-rule">' + esc(r.rule) + '</span>' +
-        '</div>';
+    var COL = 72;  // column at which the number starts
+    var lines = [];
 
-      if (isFail) {
-        html += '<div class="check-error-count">' + r.error_count + ' error' + (r.error_count !== 1 ? 's' : '') + '</div>';
+    lines.push(txtSpan('txt-dim', 'PRE & POST UPDATE FEATURE CLASS RECORD COUNT COMPARISON:'));
+    lines.push(txtSpan('txt-dim', '-'.repeat(56)));
+    lines.push('');
+    lines.push(txtSpan('txt-count-label', padRight('    # of Features in Pre-Update Feature Class:', COL))  + txtSpan('txt-count-value', fmt(pre)));
+    lines.push(txtSpan('txt-count-label', padRight('    # of Features in Post-Update Feature Class:', COL)) + txtSpan('txt-count-value', fmt(post)));
+    lines.push(txtSpan('txt-dim', padRight('', COL) + '----'));
+    lines.push(txtSpan('txt-count-label', padRight('    Difference (Post - Pre):', COL)) + txtSpan('txt-count-value', fmt(diff)));
+    lines.push('');
+    lines.push('');
+    lines.push(txtSpan('txt-count-label', padRight('    # of MODIFIED Features in Post Update Feature Class:', COL)) + txtSpan('txt-count-value', fmt(mod)));
+    lines.push(txtSpan('txt-count-label', padRight('    # of NEW Features in Post Update Feature Class:', COL))     + txtSpan('txt-count-value', fmt(nw)));
+    lines.push(txtSpan('txt-dim', padRight('', COL) + '-----'));
+    lines.push(txtSpan('txt-count-label', padRight('    Total NEW + MODIFIED:', COL)) + txtSpan('txt-count-value', fmt(totalNewMod)));
+    lines.push('');
 
-        if (r.affected_ids && r.affected_ids.length > 0) {
-          html += '<div class="affected-ids">';
-          html += '<div class="affected-ids-label">Affected IDs (' + r.affected_ids.length + ')</div>';
-          r.affected_ids.forEach(function (id) {
-            html += '<div class="affected-id">' + esc(String(id)) + '</div>';
-          });
-          html += '</div>';
-        }
-      }
-
-      html += '</div>';
-    });
-
-    // Fallback if section has no check entries at all
-    if (allChecks.length === 0) {
-      html += '<div class="check-item">' +
-        '<div class="check-header">' +
-        '<span class="check-icon pass">&#10003;</span>' +
-        '<span class="check-rule">No checks recorded for this section</span>' +
-        '</div></div>';
+    if (diff !== totalNewMod) {
+      lines.push(txtSpan('txt-error', '***ERROR --> ' + fmt(diff) + ' feature(s) added to post-update feature class.'));
+      lines.push(txtSpan('txt-error', '            ' + fmt(totalNewMod) + ' feature(s) flagged as NEW or MODIFIED.'));
+      lines.push(txtSpan('txt-error', '             These numbers should match.'));
+    } else {
+      lines.push(txtSpan('txt-pass', '    - No errors found'));
     }
 
-    panel.innerHTML = html;
+    lines.push('');
+    lines.push('');
+    lines.push(txtSpan('txt-count-label', padRight('    # of PERMANENT RETIREMENT Features in Post Update Feature Class:', COL)) + txtSpan('txt-count-value', fmt(pret)));
+    lines.push(txtSpan('txt-count-label', padRight('    # of RETIREMENT Features in Post Update Feature Class:', COL))          + txtSpan('txt-count-value', fmt(ret)));
+    lines.push(txtSpan('txt-dim', padRight('', COL) + '-----'));
+    lines.push(txtSpan('txt-count-label', padRight('    Total RETIRED + PERMANENTLY RETIRED:', COL)) + txtSpan('txt-count-value', fmt(totalRet)));
+    lines.push('');
+
+    if (totalRet < mod) {
+      lines.push(txtSpan('txt-error', '***ERROR --> ' + fmt(totalRet) + ' feature(s) flagged as RETIREMENT and PERMANENT RETIREMENT.'));
+      lines.push(txtSpan('txt-error', '            ' + fmt(mod) + ' feature(s) flagged as MODIFIED.'));
+      lines.push(txtSpan('txt-error', '            The number of RETIREMENT and PERMANENT RETIREMENT features should be'));
+      lines.push(txtSpan('txt-error', '            greater than or equal to the number of MODIFIED features.'));
+    } else {
+      lines.push(txtSpan('txt-pass', '    - No errors found'));
+    }
+
+    return lines;
+  }
+
+  // Build lines for Sections 1-12 from section.results[].
+  function buildGenericLines(sec) {
+    var checks = sec.results || [];
+    var lines  = [];
+
+    if (checks.length === 0) {
+      lines.push(txtSpan('txt-dim', '    (No checks recorded for this section)'));
+      return lines;
+    }
+
+    checks.forEach(function (r, i) {
+      if (i > 0) { lines.push(''); }
+      lines.push(txtSpan('txt-rule', 'RULE TO CHECK: ' + r.rule));
+
+      if (r.status !== 'FAIL') {
+        lines.push(txtSpan('txt-pass', '    - No errors found'));
+      } else {
+        var ids = r.affected_ids || [];
+        if (ids.length > 0) {
+          lines.push(txtSpan('txt-error', '***ERROR --> ' + fmt(r.error_count) + ' feature(s) failed this check:'));
+          ids.forEach(function (id) {
+            lines.push(txtSpan('txt-id', '                * ' + id));
+          });
+        } else {
+          lines.push(txtSpan('txt-error', '***ERROR --> ' + fmt(r.error_count) + ' error(s) found.'));
+        }
+      }
+    });
+
+    return lines;
+  }
+
+  function showSectionDetail(sec, data) {
+    var panel = document.getElementById('detail-panel');
+
+    // Section header line (matches .txt format exactly)
+    var headerLine = '------------Section ' + sec.id + '------------';
+    var titleLine  = sec.name.toUpperCase();
+
+    var bodyLines = (sec.id === 0)
+      ? buildSection0Lines(data)
+      : buildGenericLines(sec);
+
+    var allLines = [
+      txtSpan('txt-section-header', headerLine),
+      txtSpan('txt-section-header', titleLine),
+      txtSpan('txt-dim', '-'.repeat(56)),
+      ''
+    ].concat(bodyLines);
+
+    panel.innerHTML = '<div class="txt-report">' + allLines.join('\n') + '</div>';
   }
 
   // ── Sidebar ──
@@ -980,6 +1078,7 @@ code, .mono {
     var rows = [
       ['feature_class', run.feature_class || '-'],
       ['run_timestamp', run.run_timestamp || '-'],
+      ['operator_idir', run.operator_idir || '-'],
       ['script_version', run.script_version || '-'],
       ['overall_status', run.overall_status || '-'],
       ['total_checks', run.total_checks || 0],

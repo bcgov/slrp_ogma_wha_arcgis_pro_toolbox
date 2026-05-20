@@ -245,6 +245,7 @@ def set_global_variables():
         "qa_run": {
             "script_version": "v8",
             "run_timestamp": str(datetime.datetime.now().strftime("%Y-%m-%dT%H:%M:%S")),
+            "operator_idir": os.environ.get('USERNAME', ''),
             "feature_class": featClassName,
             "dataset_path": inDataset,
             "master_path": masterDataset,
@@ -3262,18 +3263,7 @@ def section_13_check_url_fields():
     if okTest == 0:
         fh.write(noErrorsMessage + '\n')
             
-            
-            
-    
-            
-    
-    
-    
-    
-    
-    
-    
-    
+
     fh.write('\n') 
     fh.write('\n')     
     fh.write('\n')   
