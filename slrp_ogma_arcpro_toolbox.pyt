@@ -769,42 +769,54 @@ class CompareNumRecords(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Compare Number of Records"
-        self.description = ""
+        self.description = (
+            "Compares record counts between staging area datasets and the "
+            "corresponding published BC Geographic Warehouse (BCGW) datasets "
+            "for OGMAs, Landscape Units, and SLRP planning features."
+        )
 
     def getParameterInfo(self):
-
-        #This parameter is your first parameter, you can change the name, display name, and data type as needed. 
-        #You can also add more parameters by copying and pasting this code and changing the parameter name, display name, and data type as needed.
-        param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
-            name="param_1",
-            datatype="String",
+        staging_path = arcpy.Parameter(
+            displayName="Staging Area Base Path",
+            name="staging_path",
+            datatype="DEFolder",
             parameterType="Required",
             direction="Input")
-        
-        
-        # Second parameter - optional string input
-        param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
-            name="param_2",
-            datatype="String",
+
+        bcgw_path = arcpy.Parameter(
+            displayName="BCGW SDE Connection",
+            name="bcgw_path",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+        bcgw_path.filter.list = ["RemoteDatabaseConnection"]
+
+        ogma_compare = arcpy.Parameter(
+            displayName="Compare OGMAs",
+            name="ogma_compare",
+            datatype="GPBoolean",
             parameterType="Optional",
-            direction="Input"
-            )
+            direction="Input")
+        ogma_compare.value = True
 
-        # Third parameter - example of a feature class input with a filter
-        param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
-            name="param_3",
-            datatype="DEFeatureClass",
+        lu_compare = arcpy.Parameter(
+            displayName="Compare Landscape Units",
+            name="lu_compare",
+            datatype="GPBoolean",
             parameterType="Optional",
-            direction="Input"
-            )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
+            direction="Input")
+        lu_compare.value = True
 
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
+        slrp_compare = arcpy.Parameter(
+            displayName="Compare SLRP Datasets",
+            name="slrp_compare",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input")
+        slrp_compare.value = True
 
-        return parameters
+        return [staging_path, bcgw_path, ogma_compare, lu_compare, slrp_compare]
+
     def isLicensed(self):
         return True
 
@@ -815,7 +827,23 @@ class CompareNumRecords(object):
         return
 
     def execute(self, parameters, messages):
-        return
+        staging_path = parameters[0].valueAsText
+        bcgw_path = parameters[1].valueAsText
+        ogma_compare = parameters[2].value if parameters[2].value is not None else True
+        lu_compare = parameters[3].value if parameters[3].value is not None else True
+        slrp_compare = parameters[4].value if parameters[4].value is not None else True
+
+        # Ensure the toolbox directory is on sys.path so the module can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        import compare_number_of_records_staging_vs_bcgw
+        importlib.reload(compare_number_of_records_staging_vs_bcgw)
+
+        compare_number_of_records_staging_vs_bcgw.run(
+            ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path
+        )
 
     def postExecute(self, parameters):
         return
