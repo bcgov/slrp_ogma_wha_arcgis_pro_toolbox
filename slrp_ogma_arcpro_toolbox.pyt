@@ -782,9 +782,10 @@ class CompareNumRecords(object):
             datatype="DEFolder",
             parameterType="Required",
             direction="Input")
+        staging_path.value = r"\\data.bcgov\data_staging_bcgw\land_use_plans_secure\slrp"
 
         bcgw_path = arcpy.Parameter(
-            displayName="BCGW SDE Connection",
+            displayName="BCGW Connection .SDE file",
             name="bcgw_path",
             datatype="DEWorkspace",
             parameterType="Required",
@@ -821,6 +822,16 @@ class CompareNumRecords(object):
         return True
 
     def updateParameters(self, parameters):
+        # Pre-fill the BCGW SDE path from the current project's home folder
+        # if the user has not yet altered the parameter
+        if not parameters[1].altered:
+            try:
+                home = arcpy.mp.ArcGISProject("CURRENT").homeFolder
+                candidate = os.path.join(home, "Oracle-bcgw.bcgov-idwprod1.bcgov.sde")
+                if os.path.isfile(candidate):
+                    parameters[1].value = candidate
+            except Exception:
+                pass
         return
 
     def updateMessages(self, parameters):

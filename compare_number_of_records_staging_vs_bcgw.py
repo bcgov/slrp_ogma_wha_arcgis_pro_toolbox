@@ -77,7 +77,7 @@ def _get_count(dataset):
     """Wrapper around arcpy.GetCount_management that intercepts ERROR 000229 (Cannot open)
     and adds a plain-English message pointing the user to the data custodian."""
     try:
-        return _get_count(dataset)
+        return arcpy.GetCount_management(dataset)
     except arcpy.ExecuteError as e:
         if "000229" in str(e):
             arcpy.AddError(

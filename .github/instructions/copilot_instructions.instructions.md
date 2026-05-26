@@ -85,6 +85,9 @@ Before changing any line, write this block above it:
 ```
 If you cannot complete all four fields, you do not yet understand the code well enough to change it.
 
+**New helper functions — additional mandatory rule:**
+Any newly introduced helper function must state in its CHANGE annotation the exact library/arcpy call it delegates to (e.g. "delegates to `arcpy.GetCount_management`"). If the body does not call that exact symbol, the function is incomplete and must not be committed. This prevents the pattern where a wrapper is scaffolded but the body accidentally calls itself instead of the underlying function, producing an infinite recursion that only fails at runtime.
+
 #### Annotation Tags (Use These in Code)
 
 
