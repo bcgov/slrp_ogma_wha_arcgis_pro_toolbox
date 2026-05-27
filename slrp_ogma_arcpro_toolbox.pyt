@@ -98,16 +98,16 @@ class UpdateSeqNumbers(object):
 
 
         param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
+            displayName = "Field to Update",
             name="param_1",
-            datatype="String",
+            datatype="Field",
             parameterType="Required",
             direction="Input")
         
         
         # Second parameter - optional string input
         param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
+            displayName="Prefix",
             name="param_2",
             datatype="String",
             parameterType="Optional",
@@ -116,7 +116,7 @@ class UpdateSeqNumbers(object):
 
         # Third parameter - example of a feature class input with a filter
         param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
+            displayName="Input Feature Class",
             name="param_3",
             datatype="DEFeatureClass",
             parameterType="Optional",

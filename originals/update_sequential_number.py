@@ -15,12 +15,11 @@ History:
 ----------------------------------------------------------------------------------------------
 Date: April 2026
 Author: Sean Parsons
-Modification: Updated script to be compatible with ArcGIS Pro toolbox and Python 3.
+Modification: Updated script to be compatible with SLRP OGMA ArcGIS Pro toolbox and Python 3.
 -----------------------------------------------------------------------------------------------
 '''
-import sys, string, os, os.path, win32com.client
-import win32com.client    #arcgisscripting
-gp=win32com.client.Dispatch("esriGeoprocessing.GpDispatch.1")
+import sys, string, os, os.path
+import arcpy
     
     
 ############################################################################################
@@ -29,23 +28,23 @@ try:
     argThisDataSet = ""
     argScriptName = sys.argv[0]
     selected_featureclass = sys.argv[1]
-    gp.addmessage(selected_featureclass)
+    arcpy.AddMessage(selected_featureclass)
     selected_field = sys.argv[2]
-    gp.addmessage(selected_field)
+    arcpy.AddMessage(selected_field)
     prefix = sys.argv[3]
-    gp.addmessage(prefix)
+    arcpy.AddMessage(prefix)
 except:
     print("no arguments")
     
 try:
     is_new_prefix = True
     is_new_prefix_arg = sys.argv[4]
-    gp.addmessage(is_new_prefix_arg)
+    arcpy.AddMessage(is_new_prefix_arg)
     if is_new_prefix_arg == 'true':
-        #gp.addmessage( "Of course its true")
+        #gp.AddMessage( "Of course its true")
         is_new_prefix = True
     if is_new_prefix_arg == 'false':
-        #gp.addmessage( "Of course its false")
+        #gp.AddMessage( "Of course its false")
         is_new_prefix = False 
 except:
     print("no arguments")
@@ -53,12 +52,12 @@ except:
 try:
     just_display_dont_update = True
     just_display_dont_update_arg  = sys.argv[5]
-    gp.addmessage(just_display_dont_update_arg)
+    arcpy.AddMessage(just_display_dont_update_arg)
     if just_display_dont_update_arg == 'true':
-        #gp.addmessage( "Of course its true")
+        #gp.AddMessage( "Of course its true")
         just_display_dont_update = True
     if just_display_dont_update_arg == 'false':
-        #gp.addmessage( "Of course its false")
+        #gp.AddMessage( "Of course its false")
         just_display_dont_update = False             
         
 except:
@@ -67,17 +66,17 @@ except:
 
 
 # these below statements are for testing so you con't have to pass the arguments in.
-'''
+
 #selected_featureclass =  r"w:\srm\kam\Workarea\ksc_proj\p09\p09_0009A_FSP_FIA_data_prep_phase2\wrk\data\prov\strategic_land_resource_plan_bc_Mark_test.gdb\slrp_albers\slrp_planning_feature_non_legal_bc_point_dup"
 #selected_field = "NON_LEGAL_FEAT_PROVID"
-selected_featureclass =  r"V:\old_growth_management_area_bc_tooltest.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly_provid"
+selected_featureclass =  r"\\spatialfiles.bcgov\srm\gss\initiatives\slrp_ogma_gar\test_source_data\M_UpdateWorkArea\OldGrowthManagementAreas\old_growth_management_area_bc.gdb\old_growth_management_area_albers_update20260312\temp_sliver_polygons_old_growth_management_area_legal_bc_poly"
 
 selected_field = "LEGAL_OGMA_PROVID"
 #selected_field = "NON_LEGAL_FEAT_ID"
 prefix = "SKE_KIS_"
 is_new_prefix = False
 just_display_dont_update = False  
-'''
+
 
 
 #selected_featureclass = r"\\Walnut\slrp\UpdateWorkarea\Tools\test_wksp\mark\old_growth_management_area_bc.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc"
@@ -96,21 +95,15 @@ just_display_dont_update = False
 ############################################################################################
 #check to see if the selected field exists and whether its a string field
 
-enumObj = gp.ListFields(selected_featureclass, '*')
-enumObj.reset()
-fldObj = enumObj.next()
-
 selected_field_exists = 'no'
-while fldObj:
-        #print 'The field name is', fldObj.Name, 'has been loaded'
-        this_field_name = fldObj.Name
-        this_field_type = fldObj.type
-        this_field_name.upper()
-        if this_field_name == selected_field.upper():
-            selected_field_exists = 'yes'
-            selected_field_type = this_field_type           
-    
-        fldObj = enumObj.next()
+for fldObj in arcpy.ListFields(selected_featureclass):
+    #print 'The field name is', fldObj.name, 'has been loaded'
+    this_field_name = fldObj.name
+    this_field_type = fldObj.type
+    this_field_name.upper()
+    if this_field_name == selected_field.upper():
+        selected_field_exists = 'yes'
+        selected_field_type = this_field_type
 ############################################################################################
 
 
@@ -126,7 +119,7 @@ while fldObj:
 This section is only relavent for string fields.
 '''
 
-if  selected_field_type == 'String':
+if  selected_field_type == 'TEXT':
     print("starting into string section")
 
 
@@ -152,16 +145,13 @@ if  selected_field_type == 'String':
     selected_field_values = []
     
     #create a cursor and read all records for selected field into a list    
-    rowsObj = gp.searchcursor(selected_featureclass)
-    row = rowsObj.next()
     number_suffix_list= []
     field_prefix_list = []
     prefix_suffix = {}
-    while row:  # read each row of the featureclass
-        execute_string = "row." + selected_field
-        field_value = eval(execute_string)
-        selected_field_values.append ( eval(execute_string))
-        row=rowsObj.next()
+    with arcpy.da.SearchCursor(selected_featureclass, [selected_field]) as cursor:
+        for row in cursor:
+            field_value = row[0]
+            selected_field_values.append(row[0])
     
         if selected_field_values:
             pig = field_value
@@ -203,7 +193,7 @@ if  selected_field_type == 'String':
     #print sa
     
     for x , y  in prefix_suffix.items():
-        gp.addmessage(str(x) + " has a highest value of   " + str(y) )
+        arcpy.AddMessage(str(x) + " has a highest value of   " + str(y) )
         print(x, " has a highest value of   " , y) 
     
     prefix_error_message = ""
@@ -223,15 +213,11 @@ if  selected_field_type == 'String':
             
             current_highest_sequence_number = prefix_suffix[prefix]
             print("current_highest_sequence_number" , current_highest_sequence_number)
-
-    del row
-    del rowsObj
-    
     
     if prefix_error_message != "":
-        gp.adderror(prefix_error_message)
-        gp.addmessage(" ")
-        gp.addmessage(" ")
+        arcpy.AddError(prefix_error_message)
+        arcpy.AddMessage(" ")
+        arcpy.AddMessage(" ")
         exit()
   
     
@@ -256,11 +242,11 @@ if  selected_field_type == 'String':
 
 
     new_numbers_start_at =    current_highest_sequence_number + 1 
-    gp.addmessage(" ")
-    gp.addmessage(" ")
-    gp.addwarning( "new_numbers_start_at   "  + str(new_numbers_start_at) + "     for  prefix  " + prefix  )
-    gp.addmessage(" ")
-    gp.addmessage(" ")
+    arcpy.AddMessage(" ")
+    arcpy.AddMessage(" ")
+    arcpy.AddWarning( "new_numbers_start_at   "  + str(new_numbers_start_at) + "     for  prefix  " + prefix  )
+    arcpy.AddMessage(" ")
+    arcpy.AddMessage(" ")
 
 
 
@@ -282,28 +268,16 @@ if  selected_field_type == 'String':
         
         print("new_numbers_start_at   " ,    new_numbers_start_at) 
         
-        
-        rowsObj = gp.updatecursor(selected_featureclass)
-        row = rowsObj.next()
-        while row:
-            
-            #create a cursor and read all records for selected field into a list    
-        
-            execute_string = "row." + selected_field
-            origional_value = eval(execute_string)
-            modified_value = origional_value.strip()
-            if modified_value == "" :
-                modified_value = prefix + str(new_numbers_start_at)
-                new_numbers_start_at = new_numbers_start_at + 1
-                execute_string = str("row." + selected_field + " = " + '"' +  modified_value + '"')
-                exec(execute_string)
-                print("updated " , modified_value)
-                rowsObj.UpdateRow(row)
-                
-            row=rowsObj.next()
-        
-        del row
-        del rowsObj
+        with arcpy.da.UpdateCursor(selected_featureclass, [selected_field]) as cursor:
+            for row in cursor:
+                origional_value = row[0]
+                modified_value = origional_value.strip()
+                if modified_value == "" :
+                    modified_value = prefix + str(new_numbers_start_at)
+                    new_numbers_start_at = new_numbers_start_at + 1
+                    row[0] = modified_value
+                    cursor.updateRow(row)
+                    print("updated " , modified_value)
         
     
 #######################################################################################################
@@ -338,20 +312,17 @@ This section is only relavent for numeric fields.  Just increment to the highest
 
 #########  Get the highest value    ########
 
-if  selected_field_type != 'String':
+if  selected_field_type != 'TEXT':
     print("starting into non_string section")
     selected_field_values = []
 
     #create a cursor and read all records for selected field into a list    
-    rowsObj = gp.searchcursor(selected_featureclass)
-    row = rowsObj.next()
     number_suffix_list= []
     highest_number = 0
-    while row:  # read each row of the featureclass
-        execute_string = "row." + selected_field
-        field_value = eval(execute_string)
-        selected_field_values.append ( eval(execute_string))
-        row=rowsObj.next()
+    with arcpy.da.SearchCursor(selected_featureclass, [selected_field]) as cursor:
+        for row in cursor:
+            field_value = row[0]
+            selected_field_values.append(row[0])
     
         if selected_field_values:
             pig = int(field_value)
@@ -361,34 +332,17 @@ if  selected_field_type != 'String':
             
     
     printstring  = "new_numbers_start_at   " + str(highest_number + 1)
-    gp.addmessage(printstring) 
-    
-    del row
-    del rowsObj
+    arcpy.AddMessage(printstring)
     
     ############################################################################################
     # Loop through again and replace the zeros
     if  just_display_dont_update is False :
-            
-                
-        rowsObj = gp.updatecursor(selected_featureclass)
-        row = rowsObj.next()
-        while row:
-            
-            #create a cursor and read all records for selected field into a list    
-        
-            execute_string = "row." + selected_field
-            origional_value = eval(execute_string)
-            if origional_value == 0:
-                highest_number  = highest_number + 1
-                execute_string = str("row." + selected_field + " = " + '"' +  str(highest_number) + '"')
-                print(execute_string)
-                exec(execute_string)
-                rowsObj.UpdateRow(row)
-                
-            row=rowsObj.next()
-            
-        
-    #del row
-    #del rowsObj
+        with arcpy.da.UpdateCursor(selected_featureclass, [selected_field]) as cursor:
+            for row in cursor:
+                origional_value = row[0]
+                if origional_value == 0:
+                    highest_number  = highest_number + 1
+                    row[0] = highest_number
+                    print(str(selected_field) + " = " + str(highest_number))
+                    cursor.updateRow(row)
         
