@@ -5,7 +5,7 @@
 # Author: https://pro.arcgis.com/en/pro-app/latest/arcpy/geoprocessing_and_python/a-template-for-python-toolboxes.htm
 
 # Created on: 03_18_26
-# 
+# ##
 #
 
 # 
@@ -15,6 +15,8 @@
 
 import arcpy
 import os
+import sys
+import importlib
 
 
 class Toolbox:
@@ -25,7 +27,7 @@ class Toolbox:
         self.alias = "toolbox"
 
         # List of tool classes associated with this toolbox
-        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, CheckGeom, AttributeQa, CompareNumRecords]  
+        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords, CompareFGDBProperties]  
        
         # Insert the name of each tool in your toolbox if you have more than one. 
         # i.e. self.tools = [FullSiteOverviewMaps, ExportSiteAndImageryLayout, Amendment]
@@ -138,6 +140,11 @@ class UpdateSeqNumbers(object):
         return
 
     def execute(self, parameters, messages):
+       
+       
+       
+       
+       
         return
 
     def postExecute(self, parameters):
@@ -455,58 +462,290 @@ class UpdateSeqNumOgmaLegalandNon(object):
         return
 
 
-class CheckGeom(object):
+class GeometryCheckTool(object):
     def __init__(self):
-        """Define the tool (tool name is the name of the class)."""
-        self.label = "Check Geometry"
-        self.description = ""
+        self.label = "Check for Geometry Issues"
+        self.description = "Runs geometry checks before BCGW submission"
 
     def getParameterInfo(self):
-
-        #This parameter is your first parameter, you can change the name, display name, and data type as needed. 
-        #You can also add more parameters by copying and pasting this code and changing the parameter name, display name, and data type as needed.
-        param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
-            name="param_1",
-            datatype="String",
+        param0 = arcpy.Parameter(
+            displayName="Feature Class to Check",
+            name="in_fc",
+            datatype="GPFeatureLayer",
             parameterType="Required",
-            direction="Input")
-        
-        
-        # Second parameter - optional string input
-        param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
-            name="param_2",
-            datatype="String",
-            parameterType="Optional",
             direction="Input"
-            )
-
-        # Third parameter - example of a feature class input with a filter
-        param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
-            name="param_3",
-            datatype="DEFeatureClass",
-            parameterType="Optional",
-            direction="Input"
-            )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
-
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
-
-        return parameters
+        )
+        return [param0]
 
     def isLicensed(self):
         return True
 
     def updateParameters(self, parameters):
-        return
+        if parameters[0].value:
+            desc = arcpy.Describe(parameters[0].value)
+            if desc.shapeType == "Point":
+                parameters[0].setWarningMessage(
+                    "Point datasets do not require this tool."
+                )
 
     def updateMessages(self, parameters):
-        return
+        if not parameters[0].value:
+            parameters[0].setErrorMessage("Input Feature Class is required.")
+            return
+
+        desc = arcpy.Describe(parameters[0].value)
+
+        if desc.shapeType == "Point":
+            parameters[0].setErrorMessage(
+                "This tool does not support point feature classes."
+            )
 
     def execute(self, parameters, messages):
-        return
+        from collections import Counter
+
+        arcpy.env.overwriteOutput = True
+
+        in_fc = parameters[0].valueAsText
+
+
+        ##in_fc = r"\\spatialfiles3.bcgov\slrp\UpdateManagement\OldGrowthManagementAreas\CurrentUpdate\old_growth_management_area_bc_Update_20210426_RETURNED_20210518.gdb\old_growth_management_area_albers\old_growth_management_area_non_legal_bc_poly"
+
+        arcpy.AddMessage(f"ArcGIS license level: {arcpy.ProductInfo()}") # This can be removed totally. 
+
+        workspace_path, fc_name = os.path.split(in_fc)
+        arcpy.AddMessage("----- Checking {} -----".format(fc_name))
+
+        desc = arcpy.Describe(in_fc)
+        fc_name = desc.baseName
+        fds_path = os.path.dirname(desc.catalogPath)
+
+        # Validate that the required MODIFICATION_TYPE field exists
+        field_names = [f.name for f in arcpy.ListFields(in_fc)]
+        if "MODIFICATION_TYPE" not in field_names:
+            arcpy.AddError(
+                "The input feature class does not have a MODIFICATION_TYPE field. "
+                "This tool only works with feature classes that have a MODIFICATION_TYPE field **Update this message after further investigation into the appropriate input types."
+            )
+            return
+
+        # ---------------- FUNCTIONS ----------------
+
+        def repair_geometry(in_fc):
+            arcpy.AddMessage("Repairing geometry where MODIFICATION_TYPE is not null...")
+
+            lyr = arcpy.CreateUniqueName("fc_lyr")
+            where_clause = "MODIFICATION_TYPE IS NOT NULL"
+
+            arcpy.management.MakeFeatureLayer(in_fc, lyr, where_clause)
+            arcpy.management.RepairGeometry(lyr)
+
+            arcpy.AddMessage("✔ Geometry repair complete")
+
+
+        def identify_very_small_polygons_or_line_segments(in_fc):
+            desc = arcpy.Describe(in_fc)
+
+            arcpy.AddMessage("Identifying small features where MODIFICATION_TYPE is not null...")
+
+            fc_lyr = arcpy.CreateUniqueName("fc_lyr")
+            where_clause = "MODIFICATION_TYPE IS NOT NULL"
+
+            arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, where_clause)
+
+            if desc.shapeType == "Polygon":
+                arcpy.AddMessage("Checking for polygons with area <= 0.5 ha...")
+
+                temp_fc = os.path.join(fds_path, f"temp_sliver_polygons_{fc_name}")
+                temp_lyr = arcpy.CreateUniqueName("temp_lyr")
+
+                arcpy.management.MultipartToSinglepart(fc_lyr, temp_fc)
+                arcpy.management.MakeFeatureLayer(temp_fc, temp_lyr)
+
+                geom_field = desc.shapeFieldName
+                area_field = f"{geom_field}_Area"
+
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", f"{area_field} <= 5000")
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "SWITCH_SELECTION")
+                arcpy.management.DeleteFeatures(temp_lyr)
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "CLEAR_SELECTION")
+
+                sliver_count = int(arcpy.management.GetCount(temp_lyr)[0])
+
+                if sliver_count> 0:
+                    arcpy.AddWarning(f"There are {sliver_count} small polygon features (<= 0.5 ha).")
+                    arcpy.AddWarning(f"Review: temp_sliver_polygons_{fc_name}")
+                else:
+                    arcpy.AddMessage("No sliver polygons found.")
+
+                arcpy.management.Delete(temp_lyr)
+
+            else:
+                arcpy.AddMessage("Checking for short line segments (< 1 meter)...")
+
+                temp_fc = os.path.join(fds_path, f"temp_short_line_segments_{fc_name}")
+                temp_lyr = arcpy.CreateUniqueName("temp_lyr")
+
+                arcpy.management.MultipartToSinglepart(fc_lyr, temp_fc)
+                arcpy.management.MakeFeatureLayer(temp_fc, temp_lyr)
+
+                geom_field = desc.shapeFieldName
+                length_field = f"{geom_field}_Length"
+
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", f"{length_field} <= 1")
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "SWITCH_SELECTION")
+                arcpy.management.DeleteFeatures(temp_lyr)
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "CLEAR_SELECTION")
+
+                short_segment_count = int(arcpy.management.GetCount(temp_lyr)[0])
+
+                if short_segment_count > 0:
+                    arcpy.AddWarning(f"There are {short_segment_count} short line segments (< 1 meter).")
+                    arcpy.AddWarning(f"Review: temp_short_line_segments_{fc_name}")
+                else:
+                    arcpy.AddMessage("No short segments found.")
+
+                arcpy.management.Delete(temp_lyr)
+
+            arcpy.management.Delete(fc_lyr)
+
+
+        def check_for_multiple_identical_vertices(in_fc):
+            arcpy.AddMessage("Checking for identical vertices (>= 4) in modified features...")
+            arcpy.AddMessage("Features with 4+ identical vertices will not load to BCGW.")
+
+            fc_lyr = arcpy.CreateUniqueName("fc_lyr")
+            where_clause = "MODIFICATION_TYPE IS NOT NULL"
+
+            arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, where_clause)
+
+            # Step 1: Copy features
+            temp_fc1 = os.path.join(fds_path, f"temp_identical_vertex_check_Step1_{fc_name}")
+            temp_fc2 = os.path.join(fds_path, f"temp_identical_vertex_check_Step2_{fc_name}")
+
+            if arcpy.Exists(temp_fc1):
+                arcpy.management.Delete(temp_fc1)
+
+            arcpy.AddMessage(" - Creating temp dataset of modified features")
+
+            arcpy.management.CopyFeatures(fc_lyr, temp_fc1)
+
+            # Step 2: Convert to points
+            arcpy.AddMessage(" - Converting features to vertices")
+            arcpy.management.FeatureVerticesToPoints(temp_fc1, temp_fc2, "ALL")
+
+            # Step 3: Add XY + fields
+            arcpy.management.AddXY(temp_fc2)
+            arcpy.management.AddField(temp_fc2, "CHECK", "TEXT", field_length=100)
+            arcpy.management.AddField(temp_fc2, "FLAG", "TEXT")
+
+            temp_lyr = arcpy.CreateUniqueName("temp_lyr")
+            arcpy.management.MakeFeatureLayer(temp_fc2, temp_lyr)
+            
+
+            # Determine ID field
+            if 'slrp' in fc_name:
+                if 'boundary' in fc_name:
+                    feat_id_field = "STRGC_LAND_RSRCE_PLAN_ID"
+                elif 'non' in fc_name:
+                    feat_id_field = "NON_LEGAL_FEAT_ID"
+                else:
+                    feat_id_field = "LEGAL_FEAT_ID"
+            elif 'landscape' in fc_name:
+                feat_id_field = "LANDSCAPE_UNIT_ID"
+            elif 'old_growth' in fc_name:
+                if 'non' in fc_name:
+                    feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
+                else:
+                    feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
+            else:
+                raise ValueError("Could not determine feature ID field.")
+
+            # Step 4: Calculate CHECK field
+            calc_expr = f"str(!{feat_id_field}!) + '_' + str(!POINT_X!) + '_' + str(!POINT_Y!)"
+            arcpy.management.CalculateField(temp_lyr, "CHECK", calc_expr, "PYTHON3")
+
+            # Step 5: Use modern cursor (FAST)
+            arcpy.AddMessage(" - Analyzing vertex duplication")
+
+            with arcpy.da.SearchCursor(temp_lyr, ["CHECK"]) as cursor:
+                values = [row[0] for row in cursor]
+
+            counts = Counter(values)
+            flagged_points = [k for k, v in counts.items() if v > 3]
+
+            # Step 6: Flag duplicates
+            for flagged_point in flagged_points:
+                where = f"CHECK = '{flagged_point}'"
+                arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", where)
+
+                count = int(arcpy.management.GetCount(temp_lyr)[0])
+
+                arcpy.management.CalculateField(temp_lyr, "FLAG", f'"{count}"', "PYTHON3")
+
+            # Step 7: Keep only flagged
+            arcpy.management.SelectLayerByAttribute(temp_lyr, "NEW_SELECTION", "FLAG IS NULL")
+            arcpy.management.DeleteFeatures(temp_lyr)
+
+            point_count = int(arcpy.management.GetCount(temp_lyr)[0])
+
+            if point_count > 0:
+                arcpy.AddWarning("There are instances of 4+ identical vertices!")
+                arcpy.AddWarning(f"Review: temp_identical_vertex_check_Step2_{fc_name}")
+            else:
+                arcpy.AddMessage("No duplicate vertices found.")
+            
+            # Cleanup
+            arcpy.management.Delete(fc_lyr)
+            arcpy.management.Delete(temp_lyr)
+
+            arcpy.AddMessage("----- Vertex check complete -----")
+
+        def check_for_max_vertices(in_fc):
+            arcpy.AddMessage("Checking vertex count for modified features...")
+            arcpy.AddMessage("All features must have < 524,000 vertices for BCGW.")
+
+            fc_lyr = arcpy.CreateUniqueName("fc_lyr")
+            where_clause = "MODIFICATION_TYPE IS NOT NULL"
+
+            arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, where_clause)
+
+            # Add and calculate vertex count
+            arcpy.management.AddField(fc_lyr, "VxCount", "LONG")
+            arcpy.management.CalculateField(fc_lyr, "VxCount", "!shape!.pointCount", "PYTHON3")
+
+            # Select features over limit
+            arcpy.management.SelectLayerByAttribute(fc_lyr, "NEW_SELECTION", "VxCount > 524000")
+
+            over_vertex_limit_count = int(arcpy.management.GetCount(fc_lyr)[0])
+
+            if over_vertex_limit_count > 0:
+                out_fc = os.path.join(fds_path, f"temp_{fc_name}_OVER_MAX_VERTICES")
+
+                arcpy.conversion.FeatureClassToFeatureClass(fc_lyr, fds_path, f"temp_{fc_name}_OVER_MAX_VERTICES")
+
+                arcpy.AddWarning(f"There are {over_vertex_limit_count} features over the vertex limit.")
+                arcpy.AddWarning("Features must have fewer than 524,000 vertices.")
+                arcpy.AddWarning(f"Review: temp_{fc_name}_OVER_MAX_VERTICES")
+
+                arcpy.AddWarning("Possible solutions:")
+                arcpy.AddWarning("- Use Simplify Polygon (<1m tolerance)")
+                arcpy.AddWarning("- Split multipart polygons")
+                arcpy.AddWarning("- Contact your Data Resource Manager")
+
+            else:
+                arcpy.AddMessage('All features are under the vertex limit ✔')
+
+            # Cleanup
+            arcpy.management.DeleteField(fc_lyr, "VxCount")
+            arcpy.management.Delete(fc_lyr)
+
+            arcpy.AddMessage("----- Vertex count check complete -----")        
+
+        # ---------------- CALL FUNCTIONS ----------------
+        repair_geometry(in_fc)
+        identify_very_small_polygons_or_line_segments(in_fc)
+        check_for_max_vertices(in_fc)
+        check_for_multiple_identical_vertices(in_fc)
 
     def postExecute(self, parameters):
         return
@@ -516,42 +755,36 @@ class AttributeQa(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Attribute QA"
-        self.description = ""
+        self.description = (
+            "Runs a comprehensive attribute quality assurance check on a "
+            "post-update feature class, comparing it against a pre-update "
+            "(master) dataset. Produces a text report listing errors."
+        )
 
     def getParameterInfo(self):
-
-        #This parameter is your first parameter, you can change the name, display name, and data type as needed. 
-        #You can also add more parameters by copying and pasting this code and changing the parameter name, display name, and data type as needed.
-        param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
-            name="param_1",
-            datatype="String",
+        in_dataset = arcpy.Parameter(
+            displayName="Post-Update Feature Class (to check)",
+            name="in_dataset",
+            datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
-        
-        
-        # Second parameter - optional string input
-        param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
-            name="param_2",
-            datatype="String",
-            parameterType="Optional",
-            direction="Input"
-            )
 
-        # Third parameter - example of a feature class input with a filter
-        param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
-            name="param_3",
-            datatype="DEFeatureClass",
-            parameterType="Optional",
-            direction="Input"
-            )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
+        master_dataset = arcpy.Parameter(
+            displayName="Pre-Update (Master) Feature Class",
+            name="master_dataset",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input")
 
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
+        report_file = arcpy.Parameter(
+            displayName="Output Report File",
+            name="report_file",
+            datatype="DEFile",
+            parameterType="Derived",
+            direction="Output")
 
-        return parameters
+        return [in_dataset, master_dataset, report_file]
+
     def isLicensed(self):
         return True
 
@@ -562,7 +795,27 @@ class AttributeQa(object):
         return
 
     def execute(self, parameters, messages):
-        return
+        # Resolve full catalog paths (the QA script derives GDB/folder paths via os.path)
+        in_dataset = arcpy.Describe(parameters[0].value).catalogPath
+        master_dataset = arcpy.Describe(parameters[1].value).catalogPath
+
+        # Ensure the toolbox directory is on sys.path so attribute_qa_v8 can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        # Import and reload to pick up any mid-session edits
+        import attribute_qa_v8
+        importlib.reload(attribute_qa_v8)
+
+        attribute_qa_v8.run(in_dataset, master_dataset)
+
+        # Set the derived output parameter to the report path (clickable in results)
+        report_path = attribute_qa_v8.attributeQAReportFile
+        arcpy.SetParameterAsText(2, report_path)
+        arcpy.AddMessage('')
+        arcpy.AddMessage('Report file: ' + report_path)
+        arcpy.AddMessage('Report folder: ' + os.path.dirname(report_path))
 
     def postExecute(self, parameters):
         return
@@ -572,42 +825,138 @@ class CompareNumRecords(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Compare Number of Records"
-        self.description = ""
+        self.description = (
+            "Compares record counts between staging area datasets and the "
+            "corresponding published BC Geographic Warehouse (BCGW) datasets "
+            "for OGMAs, Landscape Units, and SLRP planning features."
+        )
 
     def getParameterInfo(self):
-
-        #This parameter is your first parameter, you can change the name, display name, and data type as needed. 
-        #You can also add more parameters by copying and pasting this code and changing the parameter name, display name, and data type as needed.
-        param_1 = arcpy.Parameter(
-            displayName = "Parameter 1",
-            name="param_1",
-            datatype="String",
+        staging_path = arcpy.Parameter(
+            displayName="Staging Area Base Path",
+            name="staging_path",
+            datatype="DEFolder",
             parameterType="Required",
             direction="Input")
-        
-        
-        # Second parameter - optional string input
-        param_2 = arcpy.Parameter(
-            displayName="Parameter 2",
-            name="param_2",
-            datatype="String",
+        staging_path.value = r"\\data.bcgov\data_staging_bcgw\land_use_plans_secure\slrp"
+
+        bcgw_path = arcpy.Parameter(
+            displayName="BCGW Connection .SDE file",
+            name="bcgw_path",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+        bcgw_path.filter.list = ["RemoteDatabaseConnection"]
+
+        ogma_compare = arcpy.Parameter(
+            displayName="Compare OGMAs",
+            name="ogma_compare",
+            datatype="GPBoolean",
             parameterType="Optional",
-            direction="Input"
-            )
+            direction="Input")
+        ogma_compare.value = True
 
-        # Third parameter - example of a feature class input with a filter
-        param_3 = arcpy.Parameter(
-            displayName="Parameter 3",
-            name="param_3",
-            datatype="DEFeatureClass",
+        lu_compare = arcpy.Parameter(
+            displayName="Compare Landscape Units",
+            name="lu_compare",
+            datatype="GPBoolean",
             parameterType="Optional",
-            direction="Input"
-            )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
+            direction="Input")
+        lu_compare.value = True
 
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
+        slrp_compare = arcpy.Parameter(
+            displayName="Compare SLRP Datasets",
+            name="slrp_compare",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input")
+        slrp_compare.value = True
 
-        return parameters
+        return [staging_path, bcgw_path, ogma_compare, lu_compare, slrp_compare]
+
+    def isLicensed(self):
+        return True
+
+    def updateParameters(self, parameters):
+        # Pre-fill the BCGW SDE path from the current project's home folder
+        # if the user has not yet altered the parameter
+        if not parameters[1].altered:
+            try:
+                home = arcpy.mp.ArcGISProject("CURRENT").homeFolder
+                candidate = os.path.join(home, "Oracle-bcgw.bcgov-idwprod1.bcgov.sde")
+                if os.path.isfile(candidate):
+                    parameters[1].value = candidate
+            except Exception:
+                pass
+        return
+
+    def updateMessages(self, parameters):
+        return
+
+    def execute(self, parameters, messages):
+        staging_path = parameters[0].valueAsText
+        bcgw_path = parameters[1].valueAsText
+        ogma_compare = parameters[2].value if parameters[2].value is not None else True
+        lu_compare = parameters[3].value if parameters[3].value is not None else True
+        slrp_compare = parameters[4].value if parameters[4].value is not None else True
+
+        # Ensure the toolbox directory is on sys.path so the module can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        import compare_number_of_records_staging_vs_bcgw
+        importlib.reload(compare_number_of_records_staging_vs_bcgw)
+
+        compare_number_of_records_staging_vs_bcgw.run(
+            ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path
+        )
+
+    def postExecute(self, parameters):
+        return
+
+
+class CompareFGDBProperties(object):
+    def __init__(self):
+        self.label = "Compare FGDB Properties"
+        self.description = (
+            "Compares the properties of a Returned File Geodatabase against a "
+            "Master File Geodatabase: domains, domain coded values, coordinate "
+            "systems, tolerances, spatial domain/extent, fields, field "
+            "properties, and topology rules. Outputs a text log file."
+        )
+
+    def getParameterInfo(self):
+        # ORIGINAL: gp.GetParameterAsText(0) / gp.GetParameterAsText(1) at module level
+        # CHANGE: .pyt getParameterInfo() pattern; DEWorkspace parameters with LocalDatabase filter
+        # RISK: LocalDatabase filter allows both File GDB and Personal GDB; extension check in execute()
+        #       catches non-FGDB inputs at runtime
+        # DOWNSTREAM: parameters[0]/[1] consumed in execute(); parameters[2] is derived log file output
+        master_gdb = arcpy.Parameter(
+            displayName="Master File Geodatabase",
+            name="master_gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+        master_gdb.filter.list = ["LocalDatabase"]
+
+        returned_gdb = arcpy.Parameter(
+            displayName="Returned File Geodatabase",
+            name="returned_gdb",
+            datatype="DEWorkspace",
+            parameterType="Required",
+            direction="Input")
+        returned_gdb.filter.list = ["LocalDatabase"]
+
+        log_file_param = arcpy.Parameter(
+            displayName="Output Log File",
+            name="log_file",
+            datatype="DEFile",
+            parameterType="Derived",
+            direction="Output")
+
+        return [master_gdb, returned_gdb, log_file_param]
+
     def isLicensed(self):
         return True
 
@@ -618,8 +967,30 @@ class CompareNumRecords(object):
         return
 
     def execute(self, parameters, messages):
-        return
+        master_fgdb = parameters[0].valueAsText
+        returned_fgdb = parameters[1].valueAsText
+
+        # Ensure the toolbox directory is on sys.path so compare_fgdb_properties_v2 can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        # Import and reload to pick up any mid-session edits without restarting ArcGIS Pro
+        import compare_fgdb_properties_v2
+        importlib.reload(compare_fgdb_properties_v2)
+
+        compare_fgdb_properties_v2.run(master_fgdb, returned_fgdb)
+
+        # Set the derived output parameter to the log path (clickable in results)
+        log_path = compare_fgdb_properties_v2.compareFGDBLogFile
+        arcpy.SetParameterAsText(2, log_path)
+        arcpy.AddMessage('')
+        arcpy.AddMessage('Log file: ' + log_path)
+        arcpy.AddMessage('Log folder: ' + os.path.dirname(log_path))
+
+
 
     def postExecute(self, parameters):
         return
+
 

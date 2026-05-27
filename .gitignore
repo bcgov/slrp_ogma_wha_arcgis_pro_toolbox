@@ -58,3 +58,6 @@ Desktop.ini
 *.lock
 .cache/
 .pytest_cache/
+.xlsx
+
+.md
