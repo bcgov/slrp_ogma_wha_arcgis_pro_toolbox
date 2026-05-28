@@ -121,7 +121,7 @@ class UpdateSeqNumbers(object):
             displayName="Prefix",
             name="param_3",
             datatype="String",
-            parameterType="Required",
+            parameterType="Optional",
             direction="Input"
             )
 
