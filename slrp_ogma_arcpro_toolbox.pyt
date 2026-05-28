@@ -14,7 +14,9 @@
 #============================================================================
 
 import arcpy
+import importlib
 import os
+import sys
 
 
 class Toolbox:
@@ -98,31 +100,30 @@ class UpdateSeqNumbers(object):
 
 
         param_1 = arcpy.Parameter(
-            displayName = "Field to Update",
+            displayName="Input Feature Class",
             name="param_1",
-            datatype="Field",
+            datatype="DEFeatureClass",
             parameterType="Required",
             direction="Input")
+        param_1.filter.list = ["Polygon"]
         
         
-        # Second parameter - optional string input
         param_2 = arcpy.Parameter(
-            displayName="Prefix",
+            displayName="Field to Update",
             name="param_2",
-            datatype="String",
-            parameterType="Optional",
+            datatype="Field",
+            parameterType="Required",
             direction="Input"
             )
+        param_2.parameterDependencies = [param_1.name]
 
-        # Third parameter - example of a feature class input with a filter
         param_3 = arcpy.Parameter(
-            displayName="Input Feature Class",
+            displayName="Prefix",
             name="param_3",
-            datatype="DEFeatureClass",
-            parameterType="Optional",
+            datatype="String",
+            parameterType="Required",
             direction="Input"
             )
-        param_3.filter.list = ["Polygon"]  # Example filter: only allow polygon feature classes 
 
         parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
 
@@ -138,6 +139,27 @@ class UpdateSeqNumbers(object):
         return
 
     def execute(self, parameters, messages):
+        script_dir = os.path.join(os.path.dirname(__file__), "originals")
+        if script_dir not in sys.path:
+            sys.path.insert(0, script_dir)
+
+        old_argv = sys.argv[:]
+        try:
+            sys.argv = [
+                "update_sequential_number.py",
+                parameters[0].valueAsText,
+                parameters[1].valueAsText,
+                parameters[2].valueAsText,
+                "false",
+                "false",
+            ]
+
+            if "update_sequential_number" in sys.modules:
+                importlib.reload(sys.modules["update_sequential_number"])
+            else:
+                import update_sequential_number
+        finally:
+            sys.argv = old_argv
         return
 
     def postExecute(self, parameters):
