@@ -997,17 +997,6 @@ class CheckInDataset(object):
         return True
 
     def updateParameters(self, parameters):
-        # ORIGINAL: No prior implementation.
-        # CHANGE: Clear the input_feature_class parameter whenever the user
-        #         changes the update_directory, to prevent a stale FC path
-        #         from a different directory being silently carried forward.
-        # RISK: Clearing param[1] resets any value the user had already
-        #       entered for that run, which is the intended behaviour.
-        # DOWNSTREAM: param[1] is forwarded to check_in_dataset.run() as
-        #             in_dataset; a stale path would cause arcpy.Describe to
-        #             fail or QA to run against the wrong feature class.
-        if parameters[0].altered and not parameters[0].hasBeenValidated:
-            parameters[1].value = None
         return
 
     def updateMessages(self, parameters):

@@ -50,9 +50,6 @@ TYPE_TO_FOLDER = {
 # Root of UpdateManagement on spatialfiles3.
 UPDATE_MGMT_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement"
 
-# Root of the Update_Emails folder tree.
-UPDATE_EMAIL_DEST_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement\Docs\Update_Emails"
-
 
 # ---------------------------------------------------------------------------
 # Step 2: List files present in the update directory
@@ -64,8 +61,9 @@ def list_update_directory_files(update_dir):
 
     Expected files
     --------------
-    - Returned FGDB  : basename matches *_Update_*_Returned_*.gdb
-                       (case-insensitive; the GDB is a folder on disk)
+    - Returned FGDB  : the single .gdb folder in the update directory
+                       (naming convention varies in practice; the user has
+                       confirmed there is only ever one .gdb per update dir)
     - QA/QC report(s): one or more *.txt files
     - Topology report: topology_report.csv
 
@@ -92,16 +90,25 @@ def list_update_directory_files(update_dir):
     entries = os.listdir(update_dir)
 
     # --- Returned GDB ---
-    for entry in entries:
-        full_path = os.path.join(update_dir, entry)
-        if entry.lower().endswith(".gdb") and os.path.isdir(full_path):
-            name_lower = entry.lower()
-            if "_update_" in name_lower and ("_returned_" in name_lower or "_returned." in name_lower):
-                result["returned_gdb"] = full_path
-                arcpy.AddMessage("  [PRESENT] Returned FGDB : " + entry)
-                break
-    if result["returned_gdb"] is None:
-        arcpy.AddWarning("  [MISSING] Returned FGDB  (expected pattern: *_Update_*_Returned_*.gdb)")
+    # Expectation (set by the user): the update directory contains exactly
+    # one .gdb. We don't enforce a strict naming pattern — actual files in
+    # the wild use varying conventions (e.g. _Update_YYYYMMDD_Returned_YYYYMMDD,
+    # _update_YYYYMMDD, _returned_YYYYMMDD). Just pick the single .gdb.
+    gdbs_found = [
+        os.path.join(update_dir, e)
+        for e in entries
+        if e.lower().endswith(".gdb") and os.path.isdir(os.path.join(update_dir, e))
+    ]
+    if len(gdbs_found) == 1:
+        result["returned_gdb"] = gdbs_found[0]
+        arcpy.AddMessage("  [PRESENT] Returned FGDB : " + os.path.basename(gdbs_found[0]))
+    elif len(gdbs_found) == 0:
+        arcpy.AddWarning("  [MISSING] Returned FGDB  (no .gdb found in the update directory)")
+    else:
+        arcpy.AddWarning(
+            "  [AMBIGUOUS] More than one .gdb found in the update directory: "
+            + ", ".join(os.path.basename(p) for p in gdbs_found)
+        )
 
     # --- QA/QC reports (.txt) ---
     for entry in entries:
@@ -277,11 +284,8 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
 # ---------------------------------------------------------------------------
 
 def copy_reports_to_email_folder(qa_report_txt_path, topology_report_path, email_folder):
-    """Copy QA/QC report files and the topology report to the UpdateEmail
-    destination folder.
-
-    The destination is:
-        UPDATE_EMAIL_DEST_BASE \\ <basename of the user-chosen email_folder>
+    """Copy QA/QC report files and the topology report directly into the
+    UpdateEmail folder the user navigated to.
 
     QA report files copied (all co-located, derived by swapping extension):
         *.txt, *.json, *.html
@@ -291,19 +295,20 @@ def copy_reports_to_email_folder(qa_report_txt_path, topology_report_path, email
     qa_report_txt_path   : str or None  Path to the .txt QA report.
     topology_report_path : str or None  Path to topology_report.csv, or None.
     email_folder         : str          Path of the UpdateEmail folder the user
-                                        navigated to.
+                                        navigated to. Files are written here
+                                        directly (no subfolder is created).
     """
     arcpy.AddMessage("")
     arcpy.AddMessage("=" * 60)
     arcpy.AddMessage("COPYING REPORTS TO UPDATE_EMAILS")
     arcpy.AddMessage("=" * 60)
 
-    email_folder_basename = os.path.basename(email_folder.rstrip("\\/"))
-    dest_dir = os.path.join(UPDATE_EMAIL_DEST_BASE, email_folder_basename)
-
+    dest_dir = email_folder
     arcpy.AddMessage("Destination folder: " + dest_dir)
 
-    os.makedirs(dest_dir, exist_ok=True)
+    if not os.path.isdir(dest_dir):
+        arcpy.AddError("Update Email folder does not exist: " + dest_dir)
+        return
 
     # --- QA report files (.txt / .json / .html) ---
     if qa_report_txt_path and os.path.isfile(qa_report_txt_path):
@@ -374,8 +379,8 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     returned_gdb_path = checklist["returned_gdb"]
     if returned_gdb_path is None:
         arcpy.AddError(
-            "No Returned FGDB found in the update directory. "
-            "Expected a folder matching *_Update_*_Returned_*.gdb. "
+            "No (or more than one) .gdb found in the update directory. "
+            "Expected exactly one .gdb in: " + update_dir + ". "
             "Aborting check-in."
         )
         return
