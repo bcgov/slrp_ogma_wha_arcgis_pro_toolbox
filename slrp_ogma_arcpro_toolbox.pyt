@@ -27,7 +27,7 @@ class Toolbox:
         self.alias = "toolbox"
 
         # List of tool classes associated with this toolbox
-        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords, CompareFGDBProperties]  
+        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords, CompareFGDBProperties, CheckInDataset]  
        
         # Insert the name of each tool in your toolbox if you have more than one. 
         # i.e. self.tools = [FullSiteOverviewMaps, ExportSiteAndImageryLayout, Amendment]
@@ -937,4 +937,101 @@ class CompareFGDBProperties(object):
     def postExecute(self, parameters):
         return
 
+
+class CheckInDataset(object):
+    def __init__(self):
+        """Automates the dataset check-in workflow:
+        file checklist → Attribute QA → topology report display →
+        copy Returned FGDB → copy reports to Update_Emails folder."""
+        self.label = "Check In Dataset"
+        self.description = (
+            "Automates the OGMA/LU/SLRP/WHA dataset check-in workflow. "
+            "Lists expected files in the update directory, runs Attribute "
+            "QA/QC, displays the topology report, copies the Returned FGDB "
+            "to UpdateManagement/CurrentUpdate, and copies QA and topology "
+            "reports to the Update_Emails destination folder. "
+            "Read-only on the source FGDB throughout."
+        )
+
+    def getParameterInfo(self):
+        # ORIGINAL: No prior implementation — this is a new tool.
+        # CHANGE: New getParameterInfo() providing 4 input parameters for the
+        #         check-in workflow.
+        # RISK: Default value for update_directory must match the actual UNC
+        #       path used by staff; update the constant if the path changes.
+        # DOWNSTREAM: parameters[0..3] consumed in execute(); all four paths
+        #             are forwarded verbatim to check_in_dataset.run().
+
+        update_directory = arcpy.Parameter(
+            displayName="Update Work Area Directory",
+            name="update_directory",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input")
+        update_directory.value = r"\\spatialfiles3.bcgov\slrp\UpdateWorkArea\OldGrowthManagementAreas"
+
+        input_feature_class = arcpy.Parameter(
+            displayName="Input Feature Class (inside Returned FGDB)",
+            name="input_feature_class",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input")
+
+        master_feature_class = arcpy.Parameter(
+            displayName="Master Feature Class (for Attribute QA)",
+            name="master_feature_class",
+            datatype="GPFeatureLayer",
+            parameterType="Required",
+            direction="Input")
+
+        update_email_folder = arcpy.Parameter(
+            displayName="Update Email Folder for This Request",
+            name="update_email_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input")
+
+        return [update_directory, input_feature_class, master_feature_class, update_email_folder]
+
+    def isLicensed(self):
+        return True
+
+    def updateParameters(self, parameters):
+        # ORIGINAL: No prior implementation.
+        # CHANGE: Clear the input_feature_class parameter whenever the user
+        #         changes the update_directory, to prevent a stale FC path
+        #         from a different directory being silently carried forward.
+        # RISK: Clearing param[1] resets any value the user had already
+        #       entered for that run, which is the intended behaviour.
+        # DOWNSTREAM: param[1] is forwarded to check_in_dataset.run() as
+        #             in_dataset; a stale path would cause arcpy.Describe to
+        #             fail or QA to run against the wrong feature class.
+        if parameters[0].altered and not parameters[0].hasBeenValidated:
+            parameters[1].value = None
+        return
+
+    def updateMessages(self, parameters):
+        return
+
+    def execute(self, parameters, messages):
+        # Resolve full catalog paths (check_in_dataset derives GDB/folder
+        # paths from these strings via os.path operations).
+        update_dir = parameters[0].valueAsText
+        in_dataset = arcpy.Describe(parameters[1].value).catalogPath
+        master_dataset = arcpy.Describe(parameters[2].value).catalogPath
+        email_folder = parameters[3].valueAsText
+
+        # Ensure the toolbox directory is on sys.path so check_in_dataset
+        # (and, transitively, attribute_qa_v8) can be imported.
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        import check_in_dataset
+        importlib.reload(check_in_dataset)
+
+        check_in_dataset.run(update_dir, in_dataset, master_dataset, email_folder)
+
+    def postExecute(self, parameters):
+        return
 
