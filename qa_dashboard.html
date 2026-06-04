@@ -902,7 +902,7 @@ code, .mono {
   }
 
   // Build the Section 0 record-count table lines from data.record_counts.
-   {
+  function buildSection0Lines(data) {
     var rc  = data.record_counts || {};
     var bm  = rc.by_modification_type || {};
     var pre  = rc.pre_update  !== undefined ? rc.pre_update  : 0;

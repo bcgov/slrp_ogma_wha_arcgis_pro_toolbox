@@ -3282,18 +3282,35 @@ def write_json_output():
     fh.close()
     arcpy.AddMessage('JSON output written: ' + attributeQAJsonFile)
 
-    # Generate a self-contained HTML dashboard with data pre-loaded and open it
+    # Generate a self-contained HTML dashboard with data pre-loaded and open it.
+    # PRELOADED_DATA is injected directly into the HTML before </head>, so the
+    # dashboard JS auto-calls renderDashboard() on load — no file navigation needed.
+    # The template (qa_dashboard.html in the toolbox dir) is never opened directly;
+    # only the generated, data-injected copy in the update folder is opened.
     dashboard_template = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'qa_dashboard.html')
     if os.path.exists(dashboard_template):
         html_report = attributeQAJsonFile.replace('.json', '.html')
-        with open(dashboard_template, 'r') as f:
+        with open(dashboard_template, 'r', encoding='utf-8') as f:
             template = f.read()
+        # ORIGINAL: json.dumps(qaResults) injected directly into the <script> tag.
+        # CHANGE:   Replace '</' with '<\/' in the serialised JSON before injection.
+        #           If any QA result value contains the literal string '</script>',
+        #           the browser treats it as closing the injected <script> tag early,
+        #           leaving PRELOADED_DATA undefined and the dashboard showing its
+        #           file-picker landing page instead of the pre-loaded results.
+        #           '<\/' is valid JSON (forward-slash may be escaped) and valid JS,
+        #           and is invisible to the browser's tag-scanner.
+        # RISK:     None — '<\/' round-trips identically through JSON.parse().
+        # DOWNSTREAM: renderDashboard() receives the same data; no behaviour change.
+        json_str = json.dumps(qaResults, indent=2).replace('</', '<\\/')
         injected = template.replace('</head>',
-            '<script>var PRELOADED_DATA = ' + json.dumps(qaResults, indent=2) + ';</script>\n</head>')
-        with open(html_report, 'w') as f:
+            '<script>var PRELOADED_DATA = ' + json_str + ';</script>\n</head>')
+        with open(html_report, 'w', encoding='utf-8') as f:
             f.write(injected)
         arcpy.AddMessage('HTML dashboard written: ' + html_report)
         webbrowser.open(html_report)
+    else:
+        arcpy.AddWarning('qa_dashboard.html template not found — HTML report not generated.')
 
 # Final step: compact the geodatabase to reclaim space and optimise performance after edits.
 def compact_gdb():
