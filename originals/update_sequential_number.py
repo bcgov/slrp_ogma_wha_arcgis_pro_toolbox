@@ -69,13 +69,13 @@ except:
 
 #selected_featureclass =  r"w:\srm\kam\Workarea\ksc_proj\p09\p09_0009A_FSP_FIA_data_prep_phase2\wrk\data\prov\strategic_land_resource_plan_bc_Mark_test.gdb\slrp_albers\slrp_planning_feature_non_legal_bc_point_dup"
 #selected_field = "NON_LEGAL_FEAT_PROVID"
-selected_featureclass =  r"\\spatialfiles.bcgov\srm\gss\initiatives\slrp_ogma_gar\test_source_data\M_UpdateWorkArea\OldGrowthManagementAreas\old_growth_management_area_bc.gdb\old_growth_management_area_albers_update20260312\temp_sliver_polygons_old_growth_management_area_legal_bc_poly"
+#selected_featureclass =  r"\\spatialfiles.bcgov\srm\gss\initiatives\slrp_ogma_gar\test_source_data\M_UpdateWorkArea\OldGrowthManagementAreas\old_growth_management_area_bc.gdb\old_growth_management_area_albers_update20260312\temp_sliver_polygons_old_growth_management_area_legal_bc_poly"
 
-selected_field = "LEGAL_OGMA_PROVID"
+#selected_field = "LEGAL_OGMA_PROVID"
 #selected_field = "NON_LEGAL_FEAT_ID"
-prefix = "SKE_KIS_"
-is_new_prefix = False
-just_display_dont_update = False  
+#prefix = "SKE_KIS_"
+#is_new_prefix = False
+#just_display_dont_update = False  
 
 
 
@@ -100,8 +100,7 @@ for fldObj in arcpy.ListFields(selected_featureclass):
     #print 'The field name is', fldObj.name, 'has been loaded'
     this_field_name = fldObj.name
     this_field_type = fldObj.type
-    this_field_name.upper()
-    if this_field_name == selected_field.upper():
+    if this_field_name.upper() == selected_field.upper():
         selected_field_exists = 'yes'
         selected_field_type = this_field_type
 ############################################################################################
@@ -119,7 +118,7 @@ for fldObj in arcpy.ListFields(selected_featureclass):
 This section is only relavent for string fields.
 '''
 
-if  selected_field_type == 'TEXT':
+if  selected_field_type in ('TEXT', 'String'):
     print("starting into string section")
 
 
@@ -271,7 +270,7 @@ if  selected_field_type == 'TEXT':
         with arcpy.da.UpdateCursor(selected_featureclass, [selected_field]) as cursor:
             for row in cursor:
                 origional_value = row[0]
-                modified_value = origional_value.strip()
+                modified_value = (origional_value or "").strip()
                 if modified_value == "" :
                     modified_value = prefix + str(new_numbers_start_at)
                     new_numbers_start_at = new_numbers_start_at + 1
@@ -312,7 +311,7 @@ This section is only relavent for numeric fields.  Just increment to the highest
 
 #########  Get the highest value    ########
 
-if  selected_field_type != 'TEXT':
+if  selected_field_type not in ('TEXT', 'String'):
     print("starting into non_string section")
     selected_field_values = []
 
