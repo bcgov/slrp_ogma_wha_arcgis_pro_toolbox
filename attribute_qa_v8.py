@@ -3320,8 +3320,25 @@ def compact_gdb():
 def run(in_dataset, master_dataset):
     """Entry point for external callers (e.g. .pyt toolbox)."""
     global inDataset, masterDataset
-    inDataset = in_dataset
-    masterDataset = master_dataset
+    # ORIGINAL: inDataset and masterDataset assigned directly from caller arguments
+    # CHANGE: Resolve both paths via arcpy.Describe().catalogPath before use.
+    #         When a layer is renamed in the ArcGIS Pro Contents pane and then
+    #         dragged into the tool dialog, ArcGIS Pro passes the display alias
+    #         rather than the file-system path. os.path.basename() on an alias
+    #         produces a name that does not match any of the six recognised FC
+    #         names in set_global_variables(), leaving uniqueIDField / provIDField
+    #         / provIDPartNum undefined and crashing at the first section that
+    #         references them (Section 2, line 585).
+    #         catalogPath always returns the real data source path regardless of
+    #         the layer alias.
+    # RISK: If in_dataset or master_dataset is already a file-system path string
+    #       (not a layer reference), Describe() still works correctly — it just
+    #       describes the dataset at that path and returns the same path.
+    # DOWNSTREAM: set_global_variables() -> featClassName -> all six dataset
+    #             branching blocks -> uniqueIDField, provIDField, provIDPartNum
+    #             used by every subsequent section.
+    inDataset = arcpy.Describe(in_dataset).catalogPath
+    masterDataset = arcpy.Describe(master_dataset).catalogPath
     main()
     arcpy.AddMessage('')
     arcpy.AddMessage('----------------------- Tool has finished running ----------------------')
