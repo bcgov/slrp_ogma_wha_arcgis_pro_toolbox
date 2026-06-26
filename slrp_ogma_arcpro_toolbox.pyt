@@ -94,52 +94,120 @@ class UpdateSeqNumbers(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
         self.label = "Update Sequential Numbers"
-        self.description = ""
+        self.description = (
+            "Updates a field with the next highest sequential number. "
+            "For text fields, specify a prefix (e.g. CAR_RCA_) and the tool fills "
+            "blank records with the next sequential value. "
+            "For numeric fields, fills zero or null records with the next integer."
+        )
+        self.enableUndo = True  # Shows 'Enable Undo' toggle in tool dialog; ArcGIS Pro manages the edit session
 
     def getParameterInfo(self):
-
-
+        # Parameter 0: feature class to update (accepts a layer from the Contents pane)
         param_1 = arcpy.Parameter(
             displayName="Input Feature Class",
             name="param_1",
-            datatype="DEFeatureClass",
+            datatype="GPFeatureLayer",
             parameterType="Required",
             direction="Input")
-        param_1.filter.list = ["Polygon"]
-        
-        
+
+        # Parameter 1: field to update; dropdown populated from param_1
         param_2 = arcpy.Parameter(
             displayName="Field to Update",
             name="param_2",
             datatype="Field",
             parameterType="Required",
-            direction="Input"
-            )
+            direction="Input")
         param_2.parameterDependencies = [param_1.name]
 
+        # Parameter 2: prefix string (required for text fields; ignored for numeric fields)
         param_3 = arcpy.Parameter(
-            displayName="Prefix",
+            displayName="Prefix (e.g. CAR_RCA_) *include trailing underscore*",
             name="param_3",
-            datatype="String",
+            datatype="GPString",
             parameterType="Optional",
-            direction="Input"
-            )
+            direction="Input")
 
-        parameters = [param_1, param_2, param_3]  # Each parameter name needs to be in here, separated by a comma
+        # Parameter 3: safety check - must be checked if the prefix has never been used before
+        param_4 = arcpy.Parameter(
+            displayName="This will be a new prefix",
+            name="param_4",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input")
+        param_4.value = False
+        param_4.enabled = False  # enabled only when a prefix is entered
 
-        return parameters
+        # Parameter 4: dry-run mode - reports the next value without writing any changes
+        param_5 = arcpy.Parameter(
+            displayName="Just display next value - do not update",
+            name="param_5",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input")
+        param_5.value = False
+
+        # Derived output - tells ArcGIS Pro this tool modifies the input feature class
+        # (triggers the 'This tool will modify the input data' banner in the tool dialog)
+        param_out = arcpy.Parameter(
+            displayName="Updated Feature Class",
+            name="output_fc",
+            datatype="GPFeatureLayer",
+            parameterType="Derived",
+            direction="Output")
+        param_out.parameterDependencies = [param_1.name]
+        param_out.schema.clone = True
+
+        return [param_1, param_2, param_3, param_4, param_5, param_out]
 
     def isLicensed(self):
         return True
 
     def updateParameters(self, parameters):
+        # Enable 'This will be a new prefix' only when a prefix has been entered
+        if parameters[2].value:
+            parameters[3].enabled = True
+        else:
+            parameters[3].enabled = False
+            parameters[3].value = False
         return
 
     def updateMessages(self, parameters):
+        # Validate the prefix format as the user types, before execution
+        prefix_param = parameters[2]
+        if prefix_param.valueAsText:
+            val = prefix_param.valueAsText
+            if not val.endswith("_"):
+                prefix_param.setWarningMessage(
+                    "Prefix should end with an underscore (e.g. CAR_RCA_)."
+                )
+            elif "'" in val:
+                prefix_param.setErrorMessage(
+                    "Prefix must not contain single-quote characters."
+                )
+            else:
+                prefix_param.clearMessage()
         return
 
     def execute(self, parameters, messages):
-        return
+        selected_featureclass = parameters[0].valueAsText
+        selected_field = parameters[1].valueAsText
+        prefix = parameters[2].valueAsText or ""
+        is_new_prefix = parameters[3].value or False
+        just_display_dont_update = parameters[4].value or False
+
+        # Ensure the toolbox directory is on sys.path so the module can be found
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        if toolbox_dir not in sys.path:
+            sys.path.insert(0, toolbox_dir)
+
+        import update_any_sequential_number
+        importlib.reload(update_any_sequential_number)
+
+        update_any_sequential_number.run(
+            selected_featureclass, selected_field, prefix,
+            is_new_prefix, just_display_dont_update
+        )
 
     def postExecute(self, parameters):
         return
