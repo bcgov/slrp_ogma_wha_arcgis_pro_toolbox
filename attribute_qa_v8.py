@@ -1003,6 +1003,18 @@ def section_3_check_legalization_and_approval_attributes():
 
     checks_s3 = []
 
+    # ORIGINAL: selectQuery and fieldName assigned only inside feature-class-specific if branches.
+    # CHANGE: Initialise both to None so that if featClassName does not match any known dataset
+    #         name, the guarded block below can check 'if selectQuery is not None' rather than
+    #         crashing with UnboundLocalError (Python 3 treats any variable assigned anywhere in a
+    #         function as local for the entire function, so referencing it before assignment is an
+    #         error even when a guard was supposed to prevent that path).
+    # RISK: None - None is falsy; the existing outer guard is supplemented, not replaced.
+    # DOWNSTREAM: The 'if featClassName not in (...)' block that calls
+    #             arcpy.SelectLayerByAttribute_management with selectQuery.
+    selectQuery = None
+    fieldName = None
+
     # Branch on feature class name to set the correct date field and query for each dataset type.
     #set up variables based on feature class name:
     if featClassName == 'landscape_unit_poly':
@@ -1050,6 +1062,17 @@ def section_3_check_legalization_and_approval_attributes():
     # Run the date-presence query for all applicable feature classes and report affected feature IDs.
     if featClassName not in ('landscape_unit_poly', 'old_growth_management_area_legal_bc_poly', 'old_growth_management_area_non_legal_bc_poly'):
         if featClassName[:31] !=  'slrp_planning_feature_non_legal':
+            if selectQuery is None:
+                arcpy.AddError(
+                    f"Section 3: selectQuery was not set for feature class '{featClassName}'. "
+                    "This feature class name is not recognised by the QA tool. Expected one of: "
+                    "landscape_unit_poly, old_growth_management_area_legal_bc_poly, "
+                    "old_growth_management_area_non_legal_bc_poly, slrp_planning_boundary_bc_poly, "
+                    "slrp_planning_feature_legal_*, slrp_planning_feature_non_legal_*. "
+                    "Check that the input dataset path resolves to the correct feature class name "
+                    "(tip: drag from the Catalog pane, not the Contents pane)."
+                )
+                return
             #get list of errors & report out
             arcpy.MakeFeatureLayer_management(inDataset, 'fc_lyr')
             arcpy.SelectLayerByAttribute_management('fc_lyr', "NEW_SELECTION", selectQuery)

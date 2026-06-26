@@ -471,7 +471,7 @@ class GeometryCheckTool(object):
         param0 = arcpy.Parameter(
             displayName="Feature Class to Check",
             name="in_fc",
-            datatype="GPFeatureLayer",
+            datatype="DEFeatureClass",
             parameterType="Required",
             direction="Input"
         )
@@ -643,20 +643,21 @@ class GeometryCheckTool(object):
             
 
             # Determine ID field
-            if 'slrp' in fc_name:
-                if 'boundary' in fc_name:
+            fc_name_lower = fc_name.lower()
+            if 'slrp' in fc_name_lower:
+                if 'boundary' in fc_name_lower:
                     feat_id_field = "STRGC_LAND_RSRCE_PLAN_ID"
-                elif 'non' in fc_name:
+                elif 'non' in fc_name_lower:
                     feat_id_field = "NON_LEGAL_FEAT_ID"
                 else:
                     feat_id_field = "LEGAL_FEAT_ID"
-            elif 'landscape' in fc_name:
+            elif 'landscape' in fc_name_lower:
                 feat_id_field = "LANDSCAPE_UNIT_ID"
-            elif 'old_growth' in fc_name:
-                if 'non' in fc_name:
+            elif 'old_growth' in fc_name_lower:
+                if 'non' in fc_name_lower:
                     feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
                 else:
-                    feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
+                    feat_id_field = "LEGAL_OGMA_INTERNAL_ID"
             else:
                 raise ValueError("Could not determine feature ID field.")
 
