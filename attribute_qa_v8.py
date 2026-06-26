@@ -145,24 +145,79 @@ def record_section_result(section_id, section_name, checks):
 
 # Entry point: runs all QA sections in sequence then compacts the geodatabase.
 def main():
+    arcpy.SetProgressor("step", "Initializing...", 0, 18, 1)
+
+    arcpy.SetProgressorLabel("Initializing: loading global variables...")
+    arcpy.SetProgressorPosition()
     set_global_variables()
+
+    arcpy.SetProgressorLabel("Initializing: creating report file...")
+    arcpy.SetProgressorPosition()
     start_text_file()
+
+    arcpy.SetProgressorLabel("Section 0: Comparing feature counts...")
+    arcpy.SetProgressorPosition()
     section_0_DRM_checks()
+
+    arcpy.SetProgressorLabel("Section 1: Checking for false nulls...")
+    arcpy.SetProgressorPosition()
     section_1_check_for_false_nulls()
+
+    arcpy.SetProgressorLabel("Section 2: Validating change management attributes...")
+    arcpy.SetProgressorPosition()
     section_2_check_change_attribute_fields()
+
+    arcpy.SetProgressorLabel("Section 3: Checking legalization and approval dates...")
+    arcpy.SetProgressorPosition()
     section_3_check_legalization_and_approval_attributes()
+
+    arcpy.SetProgressorLabel("Section 4: Checking for zero or null in FEAT ID and PROV ID...")
+    arcpy.SetProgressorPosition()
     section_4_check_for_0_or_null_in_FEATID_and_PROVID()
+
+    arcpy.SetProgressorLabel("Section 5: Checking for gaps in PROV ID sequence...")
+    arcpy.SetProgressorPosition()
     section_5_check_for_gaps_in_PROVID()
+
+    arcpy.SetProgressorLabel("Section 6: Checking for gaps in feature ID sequence...")
+    arcpy.SetProgressorPosition()
     section_6_check_for_gaps_in_feature_id()
+
+    arcpy.SetProgressorLabel("Section 7: Checking for duplicate PROV ID/part number combinations...")
+    arcpy.SetProgressorPosition()
     section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
+
+    arcpy.SetProgressorLabel("Section 8: Checking for duplicate feature IDs...")
+    arcpy.SetProgressorPosition()
     section_8_check_for_duplicates_in_featID()
+
+    arcpy.SetProgressorLabel("Section 9: Checking PROV ID pairing rules...")
+    arcpy.SetProgressorPosition()
     section_9_check_for_provid_pairs_based_on_mod_type()
+
+    arcpy.SetProgressorLabel("Section 10: Checking PROV ID/part number duplication by modification type...")
+    arcpy.SetProgressorPosition()
     section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type()
+
+    arcpy.SetProgressorLabel("Section 11: Checking boundary-specific dependencies...")
+    arcpy.SetProgressorPosition()
     section_11_check_lo_nlpf_boundary_specific_dependancies()
+
+    arcpy.SetProgressorLabel("Section 11: Checking LU/BEO dependencies...")
+    arcpy.SetProgressorPosition()
     section_11_check_lu_beo_dependancies()
+
+    arcpy.SetProgressorLabel("Section 12: Checking domains...")
+    arcpy.SetProgressorPosition()
     section_12_check_domains()
     ##section_13_check_url_fields()
+
+    arcpy.SetProgressorLabel("Writing JSON output...")
+    arcpy.SetProgressorPosition()
     write_json_output()
+
+    arcpy.SetProgressorLabel("Compacting geodatabase...")
+    arcpy.SetProgressorPosition()
     compact_gdb()
 
 # Derive all global path variables and dataset-specific field names from the input dataset path.

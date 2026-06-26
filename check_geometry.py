@@ -246,7 +246,20 @@ def run(in_fc):
         arcpy.AddMessage("----- Vertex count check complete -----")
 
     # ---------------- CALL FUNCTIONS ----------------
+    arcpy.SetProgressor("step", "Repairing geometry...", 0, 4, 1)
+
+    arcpy.SetProgressorLabel("Step 1 of 4: Repairing geometry...")
+    arcpy.SetProgressorPosition()
     repair_geometry(in_fc)
+
+    arcpy.SetProgressorLabel("Step 2 of 4: Checking for small features...")
+    arcpy.SetProgressorPosition()
     identify_very_small_polygons_or_line_segments(in_fc)
+
+    arcpy.SetProgressorLabel("Step 3 of 4: Checking vertex count limit...")
+    arcpy.SetProgressorPosition()
     check_for_max_vertices(in_fc)
+
+    arcpy.SetProgressorLabel("Step 4 of 4: Checking for duplicate vertices...")
+    arcpy.SetProgressorPosition()
     check_for_multiple_identical_vertices(in_fc)

@@ -368,14 +368,20 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     arcpy.AddMessage("Update Email dir : " + email_folder)
     arcpy.AddMessage("*" * 60)
 
+    arcpy.SetProgressor("step", "Listing update directory files...", 0, 6, 1)
+
     # ------------------------------------------------------------------
     # Step 1: File checklist
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 1 of 6: Listing update directory files...")
+    arcpy.SetProgressorPosition()
     checklist = list_update_directory_files(update_dir)
 
     # ------------------------------------------------------------------
     # Step 2: Derive Returned GDB path and TYPE token
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 2 of 6: Deriving dataset type from GDB name...")
+    arcpy.SetProgressorPosition()
     returned_gdb_path = checklist["returned_gdb"]
     if returned_gdb_path is None:
         arcpy.AddError(
@@ -401,6 +407,8 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     # ------------------------------------------------------------------
     # Step 3: Attribute QA/QC (BLOCK gate — abort copies on failure)
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 3 of 6: Running Attribute QA/QC...")
+    arcpy.SetProgressorPosition()
     qa_report_txt_path = None
     try:
         qa_report_txt_path = run_attribute_qa(in_dataset, master_dataset)
@@ -415,11 +423,15 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     # ------------------------------------------------------------------
     # Step 4: Display topology report (informational — no gate)
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 4 of 6: Reading topology report...")
+    arcpy.SetProgressorPosition()
     read_topology_report(update_dir)
 
     # ------------------------------------------------------------------
     # Step 5: Copy Returned FGDB
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 5 of 6: Copying Returned FGDB...")
+    arcpy.SetProgressorPosition()
     try:
         copy_returned_fgdb(returned_gdb_path, type_token)
     except Exception as exc:
@@ -429,6 +441,8 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     # ------------------------------------------------------------------
     # Step 6: Copy reports to Update_Emails folder
     # ------------------------------------------------------------------
+    arcpy.SetProgressorLabel("Step 6 of 6: Copying reports to Update Emails folder...")
+    arcpy.SetProgressorPosition()
     copy_reports_to_email_folder(
         qa_report_txt_path,
         checklist["topology_report"],

@@ -37,6 +37,8 @@ def run(fc_1, field_1, fc_2, field_2, prefix, is_new_prefix, just_display):
     lyr_null = f"fc1_null_{uid}"  # Filtered view of fc_1: records with null/empty PROVID
     temp_layers = []
 
+    arcpy.SetProgressor("step", "Checking prefix existence...", 0, 4, 1)
+
     try:
         # Display all input parameters to the tool messages for traceability
         arcpy.AddMessage(f"Non-Legal FC: {fc_1}")
@@ -48,6 +50,8 @@ def run(fc_1, field_1, fc_2, field_2, prefix, is_new_prefix, just_display):
         arcpy.AddMessage(f"Just display value, don't update? {just_display}\n")
 
         # --- Step 1: Check whether the prefix already exists in either FC ---
+        arcpy.SetProgressorLabel("Step 1 of 4: Checking prefix in both feature classes...")
+        arcpy.SetProgressorPosition()
         # Build SQL WHERE clauses using AddFieldDelimiters so the syntax is correct
         # regardless of data source type (File GDB, SDE, Shapefile, etc.)
         where_1 = f"{arcpy.AddFieldDelimiters(fc_1, field_1)} LIKE '{safe_prefix}%'"
@@ -69,6 +73,8 @@ def run(fc_1, field_1, fc_2, field_2, prefix, is_new_prefix, just_display):
         total_prefix_count = count_1 + count_2
 
         # --- Step 2: Validate whether is_new_prefix True/False matches reality ---
+        arcpy.SetProgressorLabel("Step 2 of 4: Validating prefix...")
+        arcpy.SetProgressorPosition()
         if total_prefix_count == 0:
             arcpy.AddWarning(f"{prefix} is a new prefix.")
             if not is_new_prefix:
@@ -86,6 +92,8 @@ def run(fc_1, field_1, fc_2, field_2, prefix, is_new_prefix, just_display):
                 return
 
         # --- Step 3: Determine the next sequential value ---
+        arcpy.SetProgressorLabel("Step 3 of 4: Finding highest sequential value...")
+        arcpy.SetProgressorPosition()
         if is_new_prefix:
             arcpy.AddWarning(
                 f"{prefix} is a new prefix. Numbering will start at {prefix}1."
@@ -144,6 +152,11 @@ def run(fc_1, field_1, fc_2, field_2, prefix, is_new_prefix, just_display):
             )
 
         # --- Step 4: Update null/empty PROVID records in the non-legal FC ---
+        if just_display:
+            arcpy.SetProgressorLabel("Step 4 of 4: Calculating next value (display only)...")
+        else:
+            arcpy.SetProgressorLabel("Step 4 of 4: Updating records...")
+        arcpy.SetProgressorPosition()
         if not just_display:
             arcpy.AddMessage(
                 f"Updating {field_1}, starting with {prefix}{next_value}:"

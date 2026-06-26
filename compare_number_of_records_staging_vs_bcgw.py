@@ -250,12 +250,16 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
     ################################################################
     # Start dataset count comparison if comparison is set to True
     ################################################################
+    _step_count = sum([bool(ogma_compare), bool(lu_compare), bool(slrp_compare)])
+    arcpy.SetProgressor("step", "Starting record count comparison...", 0, max(_step_count, 1), 1)
 
     # OGMAs
     if ogma_compare is False:
         arcpy.AddMessage("OGMA geodatabase not selected for comparison...")
 
     if ogma_compare is True:
+        arcpy.SetProgressorLabel("Comparing OGMA record counts...")
+        arcpy.SetProgressorPosition()
         # check RMP_OGMA_LEGAL_SP
         arcpy.AddMessage("")
         arcpy.AddMessage("Checking RMP_OGMA_LEGAL_SP")
@@ -417,6 +421,8 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
         arcpy.AddMessage("Landscape Unit geodatabase not selected for comparison...")
 
     if lu_compare is True:
+        arcpy.SetProgressorLabel("Comparing Landscape Unit record counts...")
+        arcpy.SetProgressorPosition()
         # Check RMP_LANDSCAPE_UNIT_SP
         arcpy.AddMessage("")
         arcpy.AddMessage("Checking RMP_LANDSCAPE_UNIT_SP")
@@ -474,6 +480,8 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
         arcpy.AddMessage("Strategic Land Resource Plan geodatabase not selected for comparison...")
 
     if slrp_compare is True:
+        arcpy.SetProgressorLabel("Comparing SLRP record counts...")
+        arcpy.SetProgressorPosition()
         # check RMP_STRGC_LAND_RSRCE_PLAN_SP
         arcpy.AddMessage("")
         arcpy.AddMessage("Checking RMP_STRGC_LAND_RSRCE_PLAN_SP")

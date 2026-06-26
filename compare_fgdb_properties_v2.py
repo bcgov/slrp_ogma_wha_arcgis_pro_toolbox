@@ -591,8 +591,18 @@ def run(master_fgdb, returned_fgdb):
     if not arcpy.ListDatasets():
         _log('\t\tWARNING   Returned has no Datasets...')
 
+    arcpy.SetProgressor("step", "Comparing domain properties...", 0, 3, 1)
+
+    arcpy.SetProgressorLabel("Step 1 of 3: Comparing domain properties...")
+    arcpy.SetProgressorPosition()
     domain_properties()
+
+    arcpy.SetProgressorLabel("Step 2 of 3: Comparing dataset properties...")
+    arcpy.SetProgressorPosition()
     dataset_properties()
+
+    arcpy.SetProgressorLabel("Step 3 of 3: Checking topology rules...")
+    arcpy.SetProgressorPosition()
     topology_check()
 
     elapsed = time.perf_counter() - start_time
