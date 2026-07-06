@@ -159,10 +159,11 @@ def run_attribute_qa(in_dataset_path, master_dataset_path):
     arcpy.AddMessage("Input dataset : " + in_dataset_path)
     arcpy.AddMessage("Master dataset: " + master_dataset_path)
 
-    # Ensure the toolbox directory is on sys.path so attribute_qa_v8 can be found
-    toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-    if toolbox_dir not in sys.path:
-        sys.path.insert(0, toolbox_dir)
+    # Ensure the script_modules directory is on sys.path so attribute_qa_v8 can be found
+    # __file__ is script_modules/check_in_dataset.py, so script_modules is its own directory
+    modules_dir = os.path.dirname(os.path.abspath(__file__))
+    if modules_dir not in sys.path:
+        sys.path.insert(0, modules_dir)
 
     import attribute_qa_v8
     importlib.reload(attribute_qa_v8)

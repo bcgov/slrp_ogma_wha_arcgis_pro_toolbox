@@ -196,10 +196,11 @@ class UpdateSeqNumbers(object):
         is_new_prefix = parameters[3].value or False
         just_display_dont_update = parameters[4].value or False
 
-        # Ensure the toolbox directory is on sys.path so the module can be found
+        # Ensure the script_modules directory is on sys.path so the module can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         import update_any_sequential_number
         importlib.reload(update_any_sequential_number)
@@ -321,10 +322,11 @@ class UpdateSeqNumOgmaLegalandNon(object):
         is_new_prefix = parameters[5].value  # bool
         just_display = parameters[6].value   # bool
 
-        # Ensure the toolbox directory is on sys.path so the module can be found
+        # Ensure the script_modules directory is on sys.path so the module can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         import update_seq_num_ogma_legal_and_non
         importlib.reload(update_seq_num_ogma_legal_and_non)
@@ -378,10 +380,11 @@ class GeometryCheckTool(object):
     def execute(self, parameters, messages):
         in_fc = parameters[0].valueAsText
 
-        # Ensure the toolbox directory is on sys.path so the module can be found
+        # Ensure the script_modules directory is on sys.path so the module can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         import check_geometry
         importlib.reload(check_geometry)
@@ -440,10 +443,11 @@ class AttributeQa(object):
         in_dataset = arcpy.Describe(parameters[0].value).catalogPath
         master_dataset = arcpy.Describe(parameters[1].value).catalogPath
 
-        # Ensure the toolbox directory is on sys.path so attribute_qa_v8 can be found
+        # Ensure the script_modules directory is on sys.path so attribute_qa_v8 can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         # Import and reload to pick up any mid-session edits
         import attribute_qa_v8
@@ -541,10 +545,11 @@ class CompareNumRecords(object):
         lu_compare = parameters[3].value if parameters[3].value is not None else True
         slrp_compare = parameters[4].value if parameters[4].value is not None else True
 
-        # Ensure the toolbox directory is on sys.path so the module can be found
+        # Ensure the script_modules directory is on sys.path so the module can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         import compare_number_of_records_staging_vs_bcgw
         importlib.reload(compare_number_of_records_staging_vs_bcgw)
@@ -611,10 +616,11 @@ class CompareFGDBProperties(object):
         master_fgdb = parameters[0].valueAsText
         returned_fgdb = parameters[1].valueAsText
 
-        # Ensure the toolbox directory is on sys.path so compare_fgdb_properties_v2 can be found
+        # Ensure the script_modules directory is on sys.path so compare_fgdb_properties_v2 can be found
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         # Import and reload to pick up any mid-session edits without restarting ArcGIS Pro
         import compare_fgdb_properties_v2
@@ -707,11 +713,12 @@ class CheckInDataset(object):
         master_dataset = arcpy.Describe(parameters[2].value).catalogPath
         email_folder = parameters[3].valueAsText
 
-        # Ensure the toolbox directory is on sys.path so check_in_dataset
+        # Ensure the script_modules directory is on sys.path so check_in_dataset
         # (and, transitively, attribute_qa_v8) can be imported.
         toolbox_dir = os.path.dirname(os.path.abspath(__file__))
-        if toolbox_dir not in sys.path:
-            sys.path.insert(0, toolbox_dir)
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
 
         import check_in_dataset
         importlib.reload(check_in_dataset)
