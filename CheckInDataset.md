@@ -10,7 +10,7 @@ The tool is **read-only on the source data throughout** — it never edits or lo
 
 ## When to Use It
 
-Use this tool after a dataset has been returned by the contractor or submitter and you are ready to:
+Use this tool after a dataset has been returned by the submitter and you are ready to:
 
 1. Confirm all required files are present in the update directory.
 2. Run Attribute QA/QC before accepting the submission.
