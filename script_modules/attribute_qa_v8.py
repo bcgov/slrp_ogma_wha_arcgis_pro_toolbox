@@ -117,13 +117,28 @@ except:
 # drmRunningTool = True
 # ####################################################################
 
-def record_section_result(section_id, section_name, checks):
+# ORIGINAL: record_section_result(section_id, section_name, checks) — stored only
+#   machine-oriented "rule" strings per check, no section-level explanation.
+# CHANGE: Added optional description="" parameter, stored as "description" in the
+#   JSON section dict. Purely additive — default is an empty string, so any existing
+#   caller that does not pass description behaves identically to before.
+# RISK: None — backward compatible; only affects the new "description" key. No
+#   existing error-detection logic, query, or field is touched.
+# DOWNSTREAM: Every record_section_result(...) call site (Sections 0-12) gains a new
+#   description= argument in Step 2. qa_dashboard.html detail panel rendering, if that
+#   file is also present in this workspace (Step 3).
+def record_section_result(section_id, section_name, checks, description=""):
     """
     checks is a list of dicts, each with keys:
         rule        (string)
         status      ("PASS" or "FAIL")
         error_count (int)
         affected_ids (list of strings)
+
+    description (string, optional): Plain-language explanation of what this section's
+        checks are looking for, what an error means, and what steps to take to fix it.
+        Shown in the HTML dashboard when the section is selected, so a user does not
+        need to already know the data model to understand and act on a failure.
     """
     import json
     section_errors = sum(c["error_count"] for c in checks)
@@ -135,6 +150,7 @@ def record_section_result(section_id, section_name, checks):
         "status": section_status,
         "checks": len(checks),
         "errors": section_errors,
+        "description": description,
         "results": checks
     })
 
@@ -438,7 +454,21 @@ def section_0_DRM_checks():
             "error_count": 0 if int(permRetireCount) + int(retireCount) >= int(modifiedCount) else 1,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: Compares the total feature count in the working (post-update) dataset to the "
+        "master (pre-update) dataset, and cross-checks that difference against how many rows are flagged "
+        "NEW, MODIFIED, RETIREMENT, and PERMANENT RETIREMENT.\n\n"
+        "WHAT AN ERROR MEANS: If the record-count difference does not equal NEW + MODIFIED, or if "
+        "RETIREMENT + PERMANENT RETIREMENT is less than MODIFIED, some edited feature is missing its "
+        "required partner row. Every MODIFIED feature must be paired with a RETIREMENT row for the polygon "
+        "it replaces -- features are never physically deleted, only retired in place.\n\n"
+        "HOW TO FIX: In the working FGDB, select all records where MODIFICATION_TYPE is not null and "
+        "export them to a table so you can review the full set of edits for this checkout. Confirm every "
+        "MODIFIED PROVID has a matching RETIREMENT row with the same PROVID, and that every feature meant "
+        "to disappear entirely is flagged PERMANENT RETIREMENT rather than removed from the dataset. "
+        "Re-run this QA/QC tool after correcting."
+    ))
 
     fh.close()
 
@@ -551,7 +581,20 @@ def section_1_check_for_false_nulls():
         "error_count": json_s1_numeric_errors,
         "affected_ids": json_s1_numeric_ids if json_s1_numeric_errors > 0 else []
     })
-    record_section_result(1, "False and Invalid Null Values", checks_s1)
+    record_section_result(1, "False and Invalid Null Values", checks_s1,
+    description=(
+        "WHAT THIS CHECKS: Scans every text field for the literal characters <Null>, <NULL>, Null, NULL, "
+        "null, or <null> typed in as a string. These look empty in the ArcGIS Pro attribute table but are "
+        "NOT true database NULLs, so a query like \"FIELD IS NULL\" will silently miss them. Also scans "
+        "numeric fields for genuine NULL values, which are not allowed in this dataset.\n\n"
+        "WHAT AN ERROR MEANS: The affected feature has the word 'Null'/'NULL' typed into a field instead of "
+        "a real blank value. This usually happens from copying an old feature's attributes or from a Field "
+        "Calculator expression that writes the text 'NULL' rather than clearing the value.\n\n"
+        "HOW TO FIX: Open the affected feature (by the unique ID listed below) in the attribute table, find "
+        "the flagged field, and clear it properly -- right-click the field in the Attributes pane and choose "
+        "'Set to Null', rather than typing the word NULL. Do this inside an edit session so the true-null "
+        "value is stored correctly, then re-run this QA/QC tool to confirm it is resolved."
+    ))
 
     fh.close()
     
@@ -1028,7 +1071,27 @@ def section_2_check_change_attribute_fields():
         "affected_ids": json_s2_idir_ids if okCount > 0 else []
     })
 
-    record_section_result(2, "Change Management Attributes", checks_s2)
+    record_section_result(2, "Change Management Attributes", checks_s2,
+    description=(
+        "WHAT THIS CHECKS: Validates the change-management attribute rules described in "
+        "Change_Management_Attributes.pdf and Section 2.7 of the OGMA Update Process doc: (1) STATUS must "
+        "match MODIFICATION_TYPE -- NEW/MODIFIED/MODIFIED_NOREPLACE must be STATUS=Current, and "
+        "RETIREMENT/PERMANENT RETIREMENT must be STATUS=Retired; (2) Current features must have "
+        "GIS_CHANGE_DATE, GIS_CHANGE_PERSON, CHANGE_REASON, and INITIATOR_OF_CHANGE filled in, and must NOT "
+        "have any of the four RETIREMENT_* fields filled in; (3) Retired features must have the four "
+        "RETIREMENT_* fields filled in; (4) IDIR usernames in all four person fields must be uppercase.\n\n"
+        "WHAT AN ERROR MEANS: A feature's STATUS, MODIFICATION_TYPE, and change-management fields are out "
+        "of sync. This is the two-row pairing pattern at the heart of every update: an edited feature "
+        "should exist as a Current/MODIFIED row carrying the new attributes, plus a Retired/RETIREMENT row "
+        "carrying only the retirement fields for the version it replaces.\n\n"
+        "HOW TO FIX: For each unique ID listed, open the row and confirm STATUS is Current only when "
+        "MODIFICATION_TYPE is NEW, MODIFIED, or MODIFIED_NOREPLACE, and Retired only when MODIFICATION_TYPE "
+        "is RETIREMENT or PERMANENT RETIREMENT. On the Current row, populate GIS_CHANGE_DATE, "
+        "GIS_CHANGE_PERSON (your IDIR, in UPPERCASE), CHANGE_REASON, and INITIATOR_OF_CHANGE, and leave all "
+        "four RETIREMENT_* fields NULL. On the Retired row, populate RETIREMENT_DATE, "
+        "RETIREMENT_GIS_CHANGE_PERSON (UPPERCASE), RETIREMENT_REASON, and RETIREMENT_INITIATOR_OF_CHANGE, "
+        "and leave its GIS_CHANGE_* fields untouched from the original feature."
+    ))
 
 
     fh.write('\n')
@@ -1402,7 +1465,22 @@ def section_3_check_legalization_and_approval_attributes():
         })
 
 
-    record_section_result(3, "Legalization and Approval Attributes", checks_s3)
+    record_section_result(3, "Legalization and Approval Attributes", checks_s3,
+    description=(
+        "WHAT THIS CHECKS: For Legal OGMAs and legal SLRP planning features, confirms LEGALIZATION_DATE is "
+        "filled in and later than 1900-01-01. For Legal OGMAs specifically, also cross-checks that "
+        "LEGALIZATION_FRPA_DATE and/or LEGALIZATION_OGAA_DATE are filled in (and ONLY filled in) according "
+        "to ASSOCIATED_ACT_NAME (FRPA, OGAA, or 'FRPA and OGAA'). For SLRP boundaries, confirms "
+        "APPROVAL_DATE is filled in when PLAN_STATUS is Approved. Also confirms ASSOCIATED_ACT_NAME itself "
+        "is never null or blank on any OGMA feature.\n\n"
+        "WHAT AN ERROR MEANS: A legal feature is missing the date its legal order was signed off, or its "
+        "Act-specific date fields don't match what ASSOCIATED_ACT_NAME says it's governed by.\n\n"
+        "HOW TO FIX: Open the feature(s) listed below and populate LEGALIZATION_DATE with the date the "
+        "legal order was approved. Then check ASSOCIATED_ACT_NAME: if it's 'FRPA', only "
+        "LEGALIZATION_FRPA_DATE should be filled in; if it's 'OGAA', only LEGALIZATION_OGAA_DATE should be "
+        "filled in; if it's 'FRPA and OGAA', both must be filled in. ASSOCIATED_ACT_NAME itself must never "
+        "be left null -- every OGMA feature must declare which Act(s) it falls under."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -1481,7 +1559,20 @@ def section_4_check_for_0_or_null_in_FEATID_and_PROVID():
             "error_count": json_s4_provid_errors,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: Confirms the internal unique ID field (e.g. NON_LEGAL_OGMA_INTERNAL_ID) and the "
+        "PROVID field are never 0, blank, or NULL on any feature.\n\n"
+        "WHAT AN ERROR MEANS: A feature is missing one of its identifiers. INTERNAL_ID is deliberately set "
+        "to 0 on new/updated features until the sequential-numbering tool renumbers it -- if this check is "
+        "failing, that renumbering step was likely skipped. PROVID must never be blank; it is the permanent "
+        "identifier that follows a feature through its whole lifecycle and is never reused or reassigned.\n\n"
+        "HOW TO FIX: For INTERNAL_ID errors, run the 'Update Field with Sequential Numbers - OGMAs, LUs & "
+        "SLRP' tool (the toolbox's UpdateSeqNumOgmaLegalandNon tool) against the working dataset so every "
+        "MODIFIED/NEW row gets renumbered from 0. For PROVID errors, manually populate PROVID following the "
+        "regional prefix (KAM/KOR/PRG/SKE/CAR/NAN/FSJ/SRY) + planning area + OGMA number convention -- never "
+        "invent a new numbering scheme, and never reuse a PROVID that belongs to a retired feature."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -1669,7 +1760,20 @@ def section_5_check_for_gaps_in_PROVID():
             "error_count": okTest,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: For SLRP planning features (and Landscape Units/boundaries elsewhere), walks the "
+        "full list of PROVIDs and looks for missing numbers in the expected sequence. Known historical gaps "
+        "from the 2015 Skeena mass-deletion event (SKE_17, SKE_20, SKE_23 prefixes) are excluded. OGMA "
+        "datasets are not checked for PROVID gaps by this section.\n\n"
+        "WHAT AN ERROR MEANS: A PROVID number in the expected sequence is missing -- most often because a "
+        "feature was skipped when assigning numbers, was physically deleted instead of retired, or a "
+        "PROVID was typed incorrectly.\n\n"
+        "HOW TO FIX: First confirm the missing number isn't a legitimate historical exception (check with "
+        "the Data Resource Manager if unsure). If a feature is genuinely missing, it needs to be added back "
+        "as a retired or permanently-retired feature carrying that PROVID rather than left as a gap -- "
+        "PROVIDs and features are never deleted from this dataset, only retired in place."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -1830,7 +1934,20 @@ def section_6_check_for_gaps_in_feature_id():
             "error_count": okTest,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: Same gap-detection logic as Section 5, applied to the internal unique ID field "
+        "(FEAT_ID/INTERNAL_ID) instead of PROVID. Counting starts from a hardcoded baseline that skips "
+        "ranges voided by past mass-deletion cleanups.\n\n"
+        "WHAT AN ERROR MEANS: An internal ID number is missing from the sequence -- most likely a feature "
+        "that was never renumbered by the sequential-numbering tool, or one that was removed instead of "
+        "retired.\n\n"
+        "HOW TO FIX: Run the 'Update Field with Sequential Numbers - OGMAs, LUs & SLRP' tool against the "
+        "working dataset so all new/modified features get sequential internal IDs with no gaps. If the gap "
+        "looks like a genuine historical exception, confirm with the Data Resource Manager before assuming "
+        "it needs fixing -- do not manually renumber existing, already-published features just to close a "
+        "gap, since INTERNAL_ID values must stay static once assigned."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -1972,7 +2089,21 @@ def section_7_check_for_duplicate_provid_provid_part_number_in_current_records()
             "error_count": okTest,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: Among CURRENT (STATUS=Current) features, confirms the combination of PROVID + "
+        "PROVID_PART_NUMBER is unique. For OGMAs, this check spans both the legal and non-legal datasets "
+        "together, since a PROVID must never be flagged Current in both places at once.\n\n"
+        "WHAT AN ERROR MEANS: Two or more Current features share the exact same PROVID and "
+        "PROVID_PART_NUMBER. This usually happens when a feature is updated but the old Current row is "
+        "never retired (STATUS never changed to Retired), leaving two 'current' versions of the same "
+        "feature at the same time.\n\n"
+        "HOW TO FIX: For the PROVID reported, find every Current-status feature carrying it. Confirm which "
+        "one is the genuinely up-to-date version and set STATUS to Retired (and populate the four "
+        "retirement fields, per Section 2) on the older copy. If the polygon was intentionally split into "
+        "multiple current parts, each part needs its own distinct PROVID_PART_NUMBER (1, 2, 3...) rather "
+        "than more than one part reusing 0."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -2056,7 +2187,19 @@ def section_8_check_for_duplicates_in_featID():
             "error_count": okTest,
             "affected_ids": []
         }
-    ])
+    ],
+    description=(
+        "WHAT THIS CHECKS: Confirms the internal unique ID field (FEAT_ID/INTERNAL_ID) has no duplicate "
+        "values anywhere in the dataset, current or retired.\n\n"
+        "WHAT AN ERROR MEANS: Two features share the same internal ID. Since this ID is meant to be static "
+        "and unique per feature for QA and tracking purposes, a duplicate usually means the "
+        "sequential-numbering tool was run at the wrong point in the workflow, or a feature was "
+        "copy/pasted without its ID being reset to 0 first.\n\n"
+        "HOW TO FIX: For the duplicated ID reported, identify which feature is the rightful owner of that "
+        "ID (usually the older, already-published one) and reset INTERNAL_ID to 0 on the other feature. "
+        "Then re-run the 'Update Field with Sequential Numbers - OGMAs, LUs & SLRP' tool so it is assigned "
+        "a fresh, unused ID."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -2567,7 +2710,26 @@ def section_9_check_for_provid_pairs_based_on_mod_type():
         "affected_ids": json_s9_modnr_ids if json_s9_modnr_errors > 0 else []
     })
 
-    record_section_result(9, "PROV_ID Pairs by Modification Type", checks_s9)
+    record_section_result(9, "PROV_ID Pairs by Modification Type", checks_s9,
+    description=(
+        "WHAT THIS CHECKS: Enforces the core two-row update pattern for this checkout: every MODIFIED "
+        "feature must have a partner feature with the same PROVID flagged RETIREMENT (the old version being "
+        "replaced), and every RETIREMENT feature must have a partner flagged MODIFIED. NEW and "
+        "MODIFIED_NOREPLACE features must NOT share their PROVID with any other MODIFICATION_TYPE at all -- "
+        "a truly new or standalone-edited feature should not have a look-alike partner row.\n\n"
+        "WHAT AN ERROR MEANS: A PROVID is missing its expected partner row, or has an unexpected one. "
+        "Common causes: forgetting to retire the old version when updating a feature, forgetting to add "
+        "the replacement version when retiring one, or reusing a PROVID that is already flagged NEW or "
+        "MODIFIED_NOREPLACE elsewhere in this same checkout.\n\n"
+        "HOW TO FIX: For each PROVID listed, pull up every row carrying it in the working FGDB and check "
+        "MODIFICATION_TYPE against the pairing rule above. If a MODIFIED row is missing its RETIREMENT "
+        "partner, add one -- a copy of the original feature with STATUS=Retired and the four retirement "
+        "fields filled in -- rather than leaving the update as a single row. If a RETIREMENT row has no "
+        "MODIFIED partner, confirm with the Initiator of Change whether this should actually be a "
+        "PERMANENT RETIREMENT (no replacement) instead. Resolve this section row-by-row before moving on, "
+        "since duplicate-style errors in later sections are often a symptom of an unresolved pairing "
+        "problem here."
+    ))
 
     fh.write('\n')
     arcpy.AddMessage('')
@@ -2661,7 +2823,24 @@ def section_10_check_for_provID_provIDpartnumber_duplication_by_mod_type():
         "status": "PASS" if json_s10_errors == 0 else "FAIL",
         "error_count": json_s10_errors,
         "affected_ids": json_s10_ids if json_s10_errors > 0 else []
-    }])
+    }],
+    description=(
+        "WHAT THIS CHECKS: Within a single MODIFICATION_TYPE value (for example, all rows currently flagged "
+        "RETIREMENT), confirms no PROVID/PROVID_PART_NUMBER combination appears more than once.\n\n"
+        "WHAT AN ERROR MEANS: Two rows with the same MODIFICATION_TYPE both carry the same "
+        "PROVID/PART_NUMBER. In this dataset this is very often a symptom of stale MODIFICATION_TYPE flags "
+        "left over from a previous update cycle that were never cleared to NULL at check-in -- those old "
+        "rows then look like duplicates of the current cycle's edits. It can also mean a row was genuinely "
+        "duplicated by copy/paste.\n\n"
+        "HOW TO FIX: For each PROVID listed, check GIS_CHANGE_DATE / RETIREMENT_DATE on the flagged rows. "
+        "If one of the 'duplicate' rows carries a date from before this checkout's editing start date, its "
+        "MODIFICATION_TYPE is stale residue from a prior cycle and should be cleared to NULL rather than "
+        "treated as a real duplicate -- filter with a query like GIS_CHANGE_DATE < [cycle start date] OR "
+        "RETIREMENT_DATE < [cycle start date] to isolate them. If both rows genuinely belong to this cycle, "
+        "determine which one is correct and either remove the accidental copy (if it was never a real, "
+        "published feature) or correct its MODIFICATION_TYPE/PROVID_PART_NUMBER so the combination is "
+        "unique."
+    ))
 
     fh.write('\n')
     fh.write('\n')
@@ -2826,7 +3005,20 @@ def section_11_check_lo_nlpf_boundary_specific_dependancies():
             "affected_ids": []
         })
 
-        record_section_result(11, "SLRP Boundary ID Mismatches", checks_s11a)
+        record_section_result(11, "SLRP Boundary ID Mismatches", checks_s11a,
+        description=(
+            "WHAT THIS CHECKS: For SLRP planning features (legal and non-legal), confirms every PROVID's "
+            "embedded SLRP ID segment (the middle number in, for example, CAR_20_123) actually exists as a "
+            "STRGC_LAND_RSRCE_PLAN_PROVID in the current SLRP boundary dataset, and that the "
+            "STRGC_LAND_RSRCE_PLAN_NAME on the feature matches the name registered for that boundary.\n\n"
+            "WHAT AN ERROR MEANS: A planning feature references an SLRP boundary/plan that doesn't exist "
+            "(or isn't Current) in the boundary dataset, or has a mismatched plan name -- most often from a "
+            "typo in the PROVID prefix or an outdated plan name copied from an older feature.\n\n"
+            "HOW TO FIX: Look up the correct SLRP boundary in slrp_planning_boundary_bc_poly for the plan "
+            "you're editing, confirm its STRGC_LAND_RSRCE_PLAN_PROVID and STRGC_LAND_RSRCE_PLAN_NAME, and "
+            "correct the flagged feature's PROVID prefix and/or STRGC_LAND_RSRCE_PLAN_NAME field so they "
+            "match exactly."
+        ))
 
     fh.write('\n')
     fh.write('\n')
@@ -3137,7 +3329,25 @@ def section_11_check_lu_beo_dependancies():
             "affected_ids": []
         })
 
-        record_section_result(11, "Landscape Unit Dependencies", checks_s11b)
+        record_section_result(11, "Landscape Unit Dependencies", checks_s11b,
+        description=(
+            "WHAT THIS CHECKS: Landscape Unit-specific rules linking the Internal/External BEO "
+            "(Biodiversity Emphasis Option) sub-type structure to STATUS and PROVID_PART_NUMBER: External "
+            "features (PROVID_PART_NUMBER = 0) must have BEO_SUB_TYPE_APPLICABLE and "
+            "BIODIVERSITY_EMPHASIS_OPTION set correctly, Internal features must have "
+            "BEO_SUB_TYPE_APPLICABLE = Yes, multi-part LUs must share the same LANDSCAPE_UNIT_NUMBER and "
+            "LANDSCAPE_UNIT_NAME across all Current parts, and every Internal-Current feature must have a "
+            "matching External-Current partner with the same PROVID.\n\n"
+            "WHAT AN ERROR MEANS: The Landscape Unit's internal/external BEO structure is inconsistent -- "
+            "most commonly a part number, BEO flag, or partner feature is missing or mismatched after a "
+            "split or boundary edit.\n\n"
+            "HOW TO FIX: For the PROVID/unique ID listed, review BEO_SUB_TYPE_APPLICABLE, "
+            "BIODIVERSITY_EMPHASIS_OPTION, STATUS, and PROVID_PART_NUMBER together against the specific "
+            "rule shown for that check, and correct whichever field is out of step with the others. If the "
+            "LANDSCAPE_UNIT_ID is one of 1021, 1022, 1027, 1028, 1031, 1811, 1813, 1816, or 1819, this may "
+            "be a known historical anomaly -- confirm with the Data Resource Manager before changing "
+            "anything."
+        ))
 
         fh.write('\n')
         fh.write('\n')
@@ -3236,7 +3446,22 @@ def section_12_check_domains():
         "status": "PASS" if okTest == 0 else "FAIL",
         "error_count": okTest,
         "affected_ids": json_s12_error_ids if okTest > 0 else []
-    }])
+    }],
+    description=(
+        "WHAT THIS CHECKS: For every field in the dataset that has a coded-value domain assigned in the "
+        "geodatabase (for example MODIFICATION_TYPE, STATUS, OGMA_TYPE, ASSOCIATED_ACT_NAME), confirms "
+        "every value actually stored in that field is one of the field's allowed domain values.\n\n"
+        "WHAT AN ERROR MEANS: A field contains a value that isn't in its domain list -- almost always "
+        "because it was populated outside of an edit session (for example with Field Calculator) rather "
+        "than through the attribute form/domain dropdown, which is the only way ArcGIS Pro enforces the "
+        "domain list at entry time.\n\n"
+        "HOW TO FIX: Open the feature by its OBJECTID and locate the flagged field, then start an edit "
+        "session and re-enter the value using the domain dropdown in the Attributes pane or attribute "
+        "table -- do not type the value directly. If you're unsure of the correct domain value for the "
+        "field, check Table 1 in the OGMA Update Process doc for that field's allowed values. After fixing "
+        "it, select the feature and run the Editor toolbar's 'Validate Features' tool to confirm the value "
+        "is now accepted, then re-run this QA/QC tool."
+    ))
 
 
     fh.write('\n') 

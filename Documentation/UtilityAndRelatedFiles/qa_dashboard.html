@@ -400,6 +400,18 @@ code, .mono {
   font-size: 0.75rem;
 }
 
+.detail-description {
+  font-size: 0.8rem;
+  line-height: 1.55;
+  color: var(--text);
+  background: var(--bg3);
+  border-left: 3px solid var(--info);
+  border-radius: 0 4px 4px 0;
+  padding: 0.75rem 0.9rem;
+  margin-bottom: 1rem;
+  white-space: pre-line;
+}
+
 .check-item {
   padding: 0.6rem 0.8rem;
   border-left: 3px solid var(--pass);
@@ -1004,6 +1016,11 @@ code, .mono {
       ? buildSection0Lines(data)
       : buildGenericLines(sec);
 
+    var html = '';
+    if (sec.description) {
+      html += '<div class="detail-description">' + esc(sec.description) + '</div>';
+    }
+
     var allLines = [
       txtSpan('txt-section-header', headerLine),
       txtSpan('txt-section-header', titleLine),
@@ -1011,7 +1028,7 @@ code, .mono {
       ''
     ].concat(bodyLines);
 
-    panel.innerHTML = '<div class="txt-report">' + allLines.join('\n') + '</div>';
+    panel.innerHTML = html + '<div class="txt-report">' + allLines.join('\n') + '</div>';
   }
 
   // ── Sidebar ──
