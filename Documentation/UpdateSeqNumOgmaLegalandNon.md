@@ -1,5 +1,19 @@
 # Update Sequential Number — OGMA Legal and Non-Legal
 
+## How to Use
+
+1. In the **Catalog** pane, open the **SLRP OGMA ArcGIS Pro Toolbox** and double-click **Update Sequential Number — OGMA Legal and Non-Legal**.
+2. Set **Non-Legal Feature Class** to the non-legal OGMA feature class containing the new (null PROVID) records.
+3. Set **Non-Legal PROVID Field** to the PROVID field in that feature class.
+4. Set **Legal Feature Class** to the corresponding legal OGMA feature class (used as a read-only reference).
+5. Set **Legal PROVID Field** to the PROVID field in the legal feature class.
+6. Enter the **Prefix** for the PROVID values (e.g. `CAR_RCA_`). The prefix must end with an underscore.
+7. *(Optional)* Check **This will be a new prefix** only if the prefix does not yet exist in either feature class.
+8. *(Optional)* Check **Just display next value — do not update** to preview the next sequential number without writing any changes. This is recommended when dealing with split polygons that require manual PROVID assignment.
+9. Click **Run**. The tool will assign sequential PROVID values to all null/empty records in the non-legal feature class and report a summary of how many features were updated.
+
+> **Tip:** If you are unsure whether a prefix already exists, run the tool with **Just display next value** checked first. If the tool errors out saying the prefix is new, check the **This will be a new prefix** box and re-run.
+
 ## Purpose
 
 This ArcGIS Pro Python Toolbox tool assigns sequential PROVID (Provincial Identifier) values to new (null/empty) records in a **non-legal** OGMA feature class. It does so by first scanning **both** the legal and non-legal feature classes to find the highest existing sequential number for a given prefix, then numbering the new records starting from the next value. This ensures PROVID numbering remains unique and continuous across both datasets.
