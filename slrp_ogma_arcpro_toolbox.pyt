@@ -93,9 +93,9 @@ class FindDuplicates(object):
 class UpdateSeqNumbers(object):
     def __init__(self):
         """Define the tool (tool name is the name of the class)."""
-        self.label = "Update Sequential Numbers"
+        self.label = "Update Any Sequential Numbers"
         self.description = (
-            "Updates a field with the next highest sequential number. "
+            "Updates any field with the next highest sequential number. "
             "For text fields, specify a prefix (e.g. CAR_RCA_) and the tool fills "
             "blank records with the next sequential value. "
             "For numeric fields, fills zero or null records with the next integer."
