@@ -483,7 +483,22 @@ class CompareNumRecords(object):
             datatype="DEFolder",
             parameterType="Required",
             direction="Input")
-        staging_path.value = r"\\data.bcgov\data_staging_bcgw\land_use_plans_secure\slrp"
+        # ORIGINAL: staging_path.value was a hardcoded UNC path literal.
+        # CHANGE: Default is now read from config.json via config_loader so
+        #         no real network path is committed to source control.
+        # RISK: If config.json is absent or unpopulated, the default is left
+        #       blank; the user can still type/browse the path in the dialog.
+        # DOWNSTREAM: Only the default display value in the tool dialog is
+        #             affected; execute() reads parameters[0].valueAsText.
+        try:
+            toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+            modules_dir = os.path.join(toolbox_dir, 'script_modules')
+            if modules_dir not in sys.path:
+                sys.path.insert(0, modules_dir)
+            import config_loader
+            staging_path.value = config_loader.get("compare_num_records", "staging_base")
+        except Exception:
+            pass  # Leave blank if config.json is not yet set up
 
         bcgw_path = arcpy.Parameter(
             displayName="BCGW Connection .SDE file",
@@ -671,7 +686,24 @@ class CheckInDataset(object):
             datatype="DEFolder",
             parameterType="Required",
             direction="Input")
-        update_directory.value = r"\\spatialfiles3.bcgov\slrp\UpdateWorkArea\OldGrowthManagementAreas"
+        # ORIGINAL: update_directory.value was a hardcoded UNC path literal.
+        # CHANGE: Default is now read from config.json via config_loader so
+        #         no real network path is committed to source control.
+        # RISK: If config.json is absent or unpopulated, the default is left
+        #       blank; the user can still type/browse the path in the dialog.
+        # DOWNSTREAM: Only the default display value in the tool dialog is
+        #             affected; execute() reads parameters[0].valueAsText.
+        try:
+            toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+            modules_dir = os.path.join(toolbox_dir, 'script_modules')
+            if modules_dir not in sys.path:
+                sys.path.insert(0, modules_dir)
+            import config_loader
+            update_directory.value = config_loader.get("check_in_dataset", "update_mgmt_base").replace(
+                "UpdateManagement", "UpdateWorkArea\\OldGrowthManagementAreas"
+            )
+        except Exception:
+            pass  # Leave blank if config.json is not yet set up
 
         input_feature_class = arcpy.Parameter(
             displayName="Input Feature Class (inside Returned FGDB)",

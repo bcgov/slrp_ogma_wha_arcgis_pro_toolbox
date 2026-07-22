@@ -11,19 +11,33 @@ folder it finds, placing the .zip alongside the original .gdb.
 """
 
 import os
+import sys
 import zipfile
 import logging
 from datetime import datetime
 
 # ---------------------------------------------------------------------------
-# CONFIGURATION — edit ROOT_DIR before running
+# CONFIGURATION — ROOT_DIR is loaded from config.json
 # ---------------------------------------------------------------------------
-ROOT_DIR = r"\\insert root directory here"
-# Set ROOT_DIR to any folder. The script recurses into ALL subdirectories and
-# zips every .gdb folder it finds. No year filtering — point it wherever you like.
+# ORIGINAL: ROOT_DIR was a hardcoded placeholder string that the user had to
+#           edit in-place before running the script.
+# CHANGE: ROOT_DIR is now read from config.json (zip_year_archives.root_dir)
+#         via config_loader so no path is ever committed to source control.
+# RISK: If config.json is absent or the key is a placeholder, config_loader
+#       raises before logging is set up; the error prints to stderr.
+# DOWNSTREAM: Only ROOT_DIR is affected; all zip/walk logic below is unchanged.
+
+# Ensure script_modules/ is on sys.path so config_loader can be imported
+# when this script is run directly (not through the toolbox).
+_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if _SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, _SCRIPT_DIR)
+
+import config_loader
+ROOT_DIR = config_loader.get("zip_year_archives", "root_dir")
 # ---------------------------------------------------------------------------
 
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+SCRIPT_DIR = _SCRIPT_DIR
 LOG_FILE = os.path.join(
      SCRIPT_DIR,
     f"zip_year_archives_{datetime.now().strftime('%Y%m%d_%H%M%S')}.log",

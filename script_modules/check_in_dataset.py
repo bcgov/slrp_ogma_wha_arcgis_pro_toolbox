@@ -25,6 +25,15 @@ import os
 import shutil
 import sys
 
+# ORIGINAL: UPDATE_MGMT_BASE was a hardcoded UNC path constant.
+# CHANGE: Loaded from config.json via config_loader so the real network path
+#         is never committed to source control.
+# RISK: If config.json is absent or the key is missing, config_loader raises
+#       a clear FileNotFoundError / KeyError before any tool work begins.
+# DOWNSTREAM: copy_returned_fgdb() reads UPDATE_MGMT_BASE at call time;
+#             no other function is affected.
+import config_loader
+
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -47,8 +56,8 @@ TYPE_TO_FOLDER = {
     "WHA":  "WildlifeHabitatAreas",
 }
 
-# Root of UpdateManagement on spatialfiles3.
-UPDATE_MGMT_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement"
+# Root of UpdateManagement — loaded from config.json at import time.
+UPDATE_MGMT_BASE = config_loader.get("check_in_dataset", "update_mgmt_base")
 
 
 # ---------------------------------------------------------------------------

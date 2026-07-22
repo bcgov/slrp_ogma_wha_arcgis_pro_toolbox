@@ -64,7 +64,7 @@ Scans the **Update Work Area Directory** and reports whether the Returned FGDB, 
 ### Step 2 — Derive Dataset Type
 Reads the name of the Returned GDB and matches it to a dataset type (OGMA / LU / SLRP / WHA). **If no match is found, the tool aborts here.** The type is used to determine the correct destination path under `UpdateManagement`.
 
-### Step 3 — Attribute QA/QC *(blocking gate)*
+### Step 3 — Attribute QA/QC 
 Runs the Attribute QA tool (`attribute_qa_v8`) against the Input Feature Class, comparing it to the Master Feature Class. Generates `.txt`, `.json`, and `.html` report files alongside the input dataset.
 
 **If QA raises an error, the tool aborts and the copy steps do not run.** Fix the reported issues and re-run.
@@ -72,14 +72,21 @@ Runs the Attribute QA tool (`attribute_qa_v8`) against the Input Feature Class, 
 ### Step 4 — Topology Report Display
 Reads `topology_report.csv` from the update directory and prints every row to the tool messages panel. **This step is informational only — the tool does not pass or fail based on topology errors.** The user determines whether the topology is acceptable.
 
-### Step 5 — Copy Returned FGDB
+### Step 5 — Rename Old Current and Copy Returned FGDB
+Look in N:\OldGrowthManagementAreas\CurrentUpdate\ for the old "Current" gdb, rename it to "old_" but keeping the rest of the file name which should contain the date.
+
+It should look like "N:\OldGrowthManagementAreas\CurrentUpdate\old_growth_management_area_bc_2026_07_10_OLD.gdb"
+
+
 Copies the entire Returned FGDB to:
 
 ```
 \\spatialfiles3.bcgov\slrp\UpdateManagement\<TypeFolder>\CurrentUpdate\<GDBName>.gdb
 ```
 
-Uses `arcpy.management.Copy()`. If a GDB with the same name already exists at the destination, it is overwritten. The source FGDB is never modified.
+Uses `arcpy.management.Copy()`. 
+
+Delete ->If a GDB with the same name already exists at the destination, it is overwritten. The source FGDB is never modified.
 
 ### Step 6 — Copy Reports to Update Emails Folder
 Copies the following files directly into the **Update Email Folder**:

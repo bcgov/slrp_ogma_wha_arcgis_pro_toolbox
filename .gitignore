@@ -49,6 +49,9 @@ source_data/
 env/
 venv/
 
+# ---------- Local configuration (contains real network paths — never commit) ----------
+config.json
+
 # ---------- OS junk ----------
 Thumbs.db
 Desktop.ini
