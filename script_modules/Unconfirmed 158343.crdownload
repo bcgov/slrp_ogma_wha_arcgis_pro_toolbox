@@ -22,18 +22,8 @@ import arcpy
 import csv
 import importlib
 import os
-import re
 import shutil
 import sys
-
-# ORIGINAL: UPDATE_MGMT_BASE was a hardcoded UNC path constant.
-# CHANGE: Loaded from config.json via config_loader so the real network path
-#         is never committed to source control.
-# RISK: If config.json is absent or the key is missing, config_loader raises
-#       a clear FileNotFoundError / KeyError before any tool work begins.
-# DOWNSTREAM: copy_returned_fgdb() reads UPDATE_MGMT_BASE at call time;
-#             no other function is affected.
-import config_loader
 
 
 # ---------------------------------------------------------------------------
@@ -57,8 +47,8 @@ TYPE_TO_FOLDER = {
     "WHA":  "WildlifeHabitatAreas",
 }
 
-# Root of UpdateManagement — loaded from .env at import time.
-UPDATE_MGMT_BASE = config_loader.UPDATE_MGMT_BASE
+# Root of UpdateManagement on spatialfiles3.
+UPDATE_MGMT_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement"
 
 
 # ---------------------------------------------------------------------------
@@ -245,16 +235,10 @@ def _derive_type_token(gdb_path):
 
 
 def copy_returned_fgdb(returned_gdb_path, type_token):
-    """Rename any existing dated GDB in CurrentUpdate to preserve it, then
-    copy the entire Returned FGDB into that directory.
+    """Copy the entire Returned FGDB to UpdateManagement\\<Type>\\CurrentUpdate.
 
-    Before copying, scans the CurrentUpdate directory for any .gdb folder
-    whose name contains a date-like pattern (4+ consecutive digits) and does
-    not already have an _OLD suffix, and renames it by appending _OLD to the
-    name.  This preserves the previous current dataset without overwriting it.
-
-    Then copies the Returned FGDB using arcpy.management.Copy(), which leaves
-    the source completely unmodified (no schema locks acquired on the source GDB).
+    Uses arcpy.management.Copy() which creates a fresh copy and leaves the
+    source completely unmodified (no schema locks acquired on the source GDB).
 
     Parameters
     ----------
@@ -272,7 +256,7 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
     """
     arcpy.AddMessage("")
     arcpy.AddMessage("=" * 60)
-    arcpy.AddMessage("RENAME OLD CURRENT GDB AND COPY RETURNED FGDB")
+    arcpy.AddMessage("COPYING RETURNED FGDB")
     arcpy.AddMessage("=" * 60)
 
     type_folder = TYPE_TO_FOLDER[type_token]
@@ -287,91 +271,80 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
         arcpy.AddError("Destination directory does not exist: " + dest_dir)
         raise FileNotFoundError("Destination directory does not exist: " + dest_dir)
 
-    # ------------------------------------------------------------------
-    # Rename any existing dated GDB in CurrentUpdate to _OLD
-    # ------------------------------------------------------------------
-    # ORIGINAL: Warned and silently overwrote any existing GDB with the
-    #           same name as the incoming Returned GDB.
-    # CHANGE: Scan CurrentUpdate for every dated .gdb (name contains 4+
-    #         consecutive digits, does not already end in _OLD) and rename
-    #         it by appending _OLD before .gdb.  This preserves the previous
-    #         current dataset so it can be recovered if needed.
-    # RISK: If an _OLD copy already exists with the same name, we warn and
-    #       skip rather than overwrite — manual cleanup may be required.
-    # DOWNSTREAM: The copy step below is unaffected as long as the renamed
-    #             GDB has a different name to the incoming Returned GDB
-    #             (which is always the case in normal workflow).
-    arcpy.AddMessage("")
-    arcpy.AddMessage("Checking CurrentUpdate for existing GDB to rename...")
-
-    existing_gdbs = [
-        entry for entry in os.listdir(dest_dir)
-        if entry.lower().endswith(".gdb")
-        and os.path.isdir(os.path.join(dest_dir, entry))
-    ]
-
-    if not existing_gdbs:
-        arcpy.AddMessage("  No existing GDB found in CurrentUpdate.")
-
-    for existing_gdb in existing_gdbs:
-        existing_gdb_path = os.path.join(dest_dir, existing_gdb)
-        basename = os.path.splitext(existing_gdb)[0]  # strip .gdb
-
-        # Skip GDBs already marked _OLD
-        if basename.upper().endswith("_OLD"):
-            arcpy.AddMessage("  Already marked _OLD, skipping: " + existing_gdb)
-            continue
-
-        # Only rename GDBs whose name contains a date-like pattern (4+ consecutive digits)
-        if not re.search(r'\d{4}', basename):
-            arcpy.AddMessage("  No date pattern in name, skipping: " + existing_gdb)
-            continue
-
-        # Skip GDBs with 'returned' in the name — those are previously copied
-        # Returned FGDBs, not the master/current dataset.  The incoming Returned
-        # GDB always has 'returned' in its name, so this also prevents the loop
-        # from ever targeting the file we are about to copy.
-        if "returned" in basename.lower():
-            arcpy.AddMessage("  Has 'returned' in name (not a master GDB), skipping: " + existing_gdb)
-            continue
-
-        new_name = basename + "_OLD.gdb"
-        new_path = os.path.join(dest_dir, new_name)
-
-        if os.path.isdir(new_path):
-            arcpy.AddWarning(
-                "  Cannot rename '" + existing_gdb + "' — target already exists: "
-                + new_name + ". Manual cleanup of CurrentUpdate may be required."
+    # ORIGINAL: When a GDB already existed at the destination, the code only logged
+    #           a warning and let arcpy.management.Copy() overwrite it. That overwrite
+    #           succeeded ONLY because attribute_qa_v8 (imported in Step 3) sets
+    #           env.overwriteOutput = True at module level — an inherited global side
+    #           effect, not a decision made here. Result: the previous CurrentUpdate
+    #           GDB was silently destroyed with no backup and no provenance.
+    # CHANGE:   Before copying, rename EVERY existing (not-already-flagged) .gdb in
+    #           CurrentUpdate by appending "_to_delete", leaving it in place for the
+    #           DRM to remove later. Then copy the new Returned FGDB in alongside it
+    #           with overwriteOutput explicitly forced False, so a residual name
+    #           collision errors loudly instead of silently clobbering. Nothing is
+    #           deleted or overwritten by this tool.
+    # RISK:     os.rename raises OSError (e.g. PermissionError) if the existing GDB
+    #           holds a schema lock — most often because it is open in this Pro
+    #           session. That is caught below and re-raised with a detailed, actionable
+    #           message; the check-in aborts before any copy, so nothing is destroyed.
+    #           A leftover "*_to_delete.gdb" from a prior cycle also aborts (fail-safe)
+    #           rather than being silently removed.
+    # DOWNSTREAM: After check-in, CurrentUpdate holds TWO gdbs: the fresh Returned FGDB
+    #           and the "_to_delete" incumbent. Any later step that assumes exactly one
+    #           .gdb in CurrentUpdate must skip "*_to_delete.gdb". CheckInDataset.md
+    #           Step 5 still documents the old "overwritten" behavior — separate doc fix.
+    for entry in os.listdir(dest_dir):
+        entry_path = os.path.join(dest_dir, entry)
+        if (entry.lower().endswith(".gdb")
+                and os.path.isdir(entry_path)
+                and not entry.lower().endswith("_to_delete.gdb")):
+            flagged_name = entry[:-len(".gdb")] + "_to_delete.gdb"
+            flagged_path = os.path.join(dest_dir, flagged_name)
+            if os.path.exists(flagged_path):
+                arcpy.AddError(
+                    "Cannot flag the existing GDB for deletion — a '_to_delete' copy "
+                    "already exists at:\n"
+                    "    " + flagged_path + "\n"
+                    "This is a leftover from a previous check-in cycle. Delete (or "
+                    "move) it manually, then re-run check-in. No data was copied or "
+                    "deleted."
+                )
+                raise FileExistsError(flagged_path)
+            try:
+                os.rename(entry_path, flagged_path)
+            except OSError as exc:
+                arcpy.AddError(
+                    "Could not flag the existing CurrentUpdate GDB for deletion, so "
+                    "check-in has been aborted. No data was copied or deleted.\n"
+                    "  Tried to rename:\n"
+                    "    " + entry_path + "\n"
+                    "  to:\n"
+                    "    " + flagged_path + "\n"
+                    "  The operating system reported: " + str(exc) + "\n"
+                    "  This almost always means the GDB is locked. The most common "
+                    "cause is that the GDB — or a feature class inside it — is "
+                    "currently open in this ArcGIS Pro session (or in ArcCatalog / "
+                    "another application), which leaves a schema lock (.lock files "
+                    "inside the .gdb folder).\n"
+                    "  To fix: remove any layers from this GDB from the map, close "
+                    "any other application that has it open, then re-run this tool. "
+                    "If the lock persists, closing and reopening ArcGIS Pro will "
+                    "clear it."
+                )
+                raise
+            arcpy.AddMessage(
+                "Flagged existing GDB for later deletion: " + entry + "  ->  " + flagged_name
             )
-            continue
 
-        arcpy.AddMessage("  Renaming: " + existing_gdb + "  ->  " + new_name)
-        arcpy.management.Rename(existing_gdb_path, new_name)
-        arcpy.AddMessage("  Rename complete.")
-
-    # ------------------------------------------------------------------
-    # Copy the Returned FGDB to CurrentUpdate
-    # ------------------------------------------------------------------
-    arcpy.AddMessage("")
-    arcpy.AddMessage("Copying Returned FGDB to CurrentUpdate...")
-
-    # Safety guard: abort if dest_gdb_path still exists after the rename pass.
-    # This prevents silently overwriting a GDB that was not caught by the
-    # rename loop (e.g. no date in the name, or _OLD target already existed).
-    if arcpy.Exists(dest_gdb_path):
-        arcpy.AddError(
-            "Cannot copy — a GDB named '" + gdb_basename + "' already exists at:\n"
-            "  " + dest_gdb_path + "\n"
-            "It was not renamed because it either has no date pattern in its name "
-            "or its _OLD copy already exists.\n"
-            "Manually rename or remove the existing GDB from CurrentUpdate, "
-            "then re-run this tool."
-        )
-        raise FileExistsError(
-            "Destination GDB already exists and was not renamed: " + dest_gdb_path
-        )
-
-    arcpy.management.Copy(returned_gdb_path, dest_gdb_path)
+    # Copy with overwrite explicitly disabled so any residual name collision raises
+    # loudly rather than silently replacing data. Restore the prior value afterward so
+    # this function does not leak an env change to later steps.
+    previous_overwrite = arcpy.env.overwriteOutput
+    arcpy.env.overwriteOutput = False
+    try:
+        arcpy.management.Copy(returned_gdb_path, dest_gdb_path)
+    finally:
+        arcpy.env.overwriteOutput = previous_overwrite
     arcpy.AddMessage("FGDB copy complete.")
     return dest_gdb_path
 
@@ -527,7 +500,7 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     # ------------------------------------------------------------------
     # Step 5: Copy Returned FGDB
     # ------------------------------------------------------------------
-    arcpy.SetProgressorLabel("Step 5 of 6: Renaming old Current GDB and copying Returned FGDB...")
+    arcpy.SetProgressorLabel("Step 5 of 6: Copying Returned FGDB...")
     arcpy.SetProgressorPosition()
     try:
         copy_returned_fgdb(returned_gdb_path, type_token)
