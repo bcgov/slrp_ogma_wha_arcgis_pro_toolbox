@@ -56,8 +56,8 @@ TYPE_TO_FOLDER = {
     "WHA":  "WildlifeHabitatAreas",
 }
 
-# Root of UpdateManagement — loaded from config.json at import time.
-UPDATE_MGMT_BASE = config_loader.get("check_in_dataset", "update_mgmt_base")
+# Root of UpdateManagement — loaded from .env at import time.
+UPDATE_MGMT_BASE = config_loader.UPDATE_MGMT_BASE
 
 
 # ---------------------------------------------------------------------------

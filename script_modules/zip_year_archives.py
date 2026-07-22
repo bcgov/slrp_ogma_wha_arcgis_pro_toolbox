@@ -34,7 +34,7 @@ if _SCRIPT_DIR not in sys.path:
     sys.path.insert(0, _SCRIPT_DIR)
 
 import config_loader
-ROOT_DIR = config_loader.get("zip_year_archives", "root_dir")
+ROOT_DIR = config_loader.ZIP_ROOT_DIR
 # ---------------------------------------------------------------------------
 
 SCRIPT_DIR = _SCRIPT_DIR

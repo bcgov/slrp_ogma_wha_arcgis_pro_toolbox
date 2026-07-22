@@ -75,12 +75,12 @@ import uuid
 # ORIGINAL: staging_path and bcgw_path were passed by the caller (toolbox .pyt)
 #           which had the staging path hardcoded as its default parameter value,
 #           and all ~100 dataset sub-paths were constructed inline in run().
-# CHANGE: Dataset sub-paths are now read from config.json via config_loader so
-#         that GDB names/structures can be updated in one place without touching
+# CHANGE: Dataset sub-paths are now read from .env via config_loader so that
+#         GDB names/structures can be updated in one place without touching
 #         source code. staging_base and bcgw_path are still accepted as run()
 #         parameters so the toolbox dialog values take precedence (the toolbox
-#         pre-fills them from config.json too, but the user can override them).
-# RISK: If config.json is absent or a key is missing, config_loader raises
+#         pre-fills them from .env too, but the user can override them).
+# RISK: If .env is absent or a key is missing, config_loader raises
 #       before any arcpy work begins.
 # DOWNSTREAM: Only the dataset path construction block inside run() is affected;
 #             all comparison logic below is unchanged.
@@ -151,94 +151,94 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
         return
 
     ##############################################################
-    # Datasets to compare — sub-paths loaded from config.json
+    # Datasets to compare — sub-paths loaded from .env
     ##############################################################
 
     def _sp(key):
-        """Build a full staging dataset path from a config dataset_paths key."""
-        return config_loader.get_dataset_path(staging_path, key)
+        """Build a full staging dataset path from a .env variable name."""
+        return os.path.join(staging_path, getattr(config_loader, key))
 
-    ogmaLegal_staging         = _sp("ogma_legal")
+    ogmaLegal_staging         = _sp("DATASET_OGMA_LEGAL")
     ogmaLegal_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_SP"
     ogmaLegal_BCGW_current_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_CURRENT_SVW"
     ogmaLegal_BCGW_all_SVW    = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_ALL_SVW"
 
-    ogmaNonLegal_staging      = _sp("ogma_non_legal")
+    ogmaNonLegal_staging      = _sp("DATASET_OGMA_NON_LEGAL")
     ogmaNonLegal_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_SP"
     ogmaNonLegal_BCGW_current_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_CURRENT_SVW"
     ogmaNonLegal_BCGW_all_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_ALL_SVW"
 
-    lu_staging                = _sp("lu")
+    lu_staging                = _sp("DATASET_LU")
     lu_BCGW                   = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SP"
     lu_BCGW_SVW               = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SVW"
 
-    slrpBoundary_staging      = _sp("slrp_boundary")
+    slrpBoundary_staging      = _sp("DATASET_SLRP_BOUNDARY")
     slrpBoundary_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SP"
     slrpBoundary_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SVW"
 
-    legalPoly_staging_CAR     = _sp("slrp_legal_poly_CAR")
-    legalPoly_staging_FSJ     = _sp("slrp_legal_poly_FSJ")
-    legalPoly_staging_KAM     = _sp("slrp_legal_poly_KAM")
-    legalPoly_staging_KOR     = _sp("slrp_legal_poly_KOR")
-    legalPoly_staging_NAN     = _sp("slrp_legal_poly_NAN")
-    legalPoly_staging_PRG     = _sp("slrp_legal_poly_PRG")
-    legalPoly_staging_SKE     = _sp("slrp_legal_poly_SKE")
-    legalPoly_staging_SUR     = _sp("slrp_legal_poly_SUR")
+    legalPoly_staging_CAR     = _sp("DATASET_SLRP_LEGAL_POLY_CAR")
+    legalPoly_staging_FSJ     = _sp("DATASET_SLRP_LEGAL_POLY_FSJ")
+    legalPoly_staging_KAM     = _sp("DATASET_SLRP_LEGAL_POLY_KAM")
+    legalPoly_staging_KOR     = _sp("DATASET_SLRP_LEGAL_POLY_KOR")
+    legalPoly_staging_NAN     = _sp("DATASET_SLRP_LEGAL_POLY_NAN")
+    legalPoly_staging_PRG     = _sp("DATASET_SLRP_LEGAL_POLY_PRG")
+    legalPoly_staging_SKE     = _sp("DATASET_SLRP_LEGAL_POLY_SKE")
+    legalPoly_staging_SUR     = _sp("DATASET_SLRP_LEGAL_POLY_SUR")
     legalPoly_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY"
     legalPoly_BCGW_SVW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY_SVW"
 
-    legalLine_staging_CAR     = _sp("slrp_legal_line_CAR")
-    legalLine_staging_FSJ     = _sp("slrp_legal_line_FSJ")
-    legalLine_staging_KAM     = _sp("slrp_legal_line_KAM")
-    legalLine_staging_KOR     = _sp("slrp_legal_line_KOR")
-    legalLine_staging_NAN     = _sp("slrp_legal_line_NAN")
-    legalLine_staging_PRG     = _sp("slrp_legal_line_PRG")
-    legalLine_staging_SKE     = _sp("slrp_legal_line_SKE")
-    legalLine_staging_SUR     = _sp("slrp_legal_line_SUR")
+    legalLine_staging_CAR     = _sp("DATASET_SLRP_LEGAL_LINE_CAR")
+    legalLine_staging_FSJ     = _sp("DATASET_SLRP_LEGAL_LINE_FSJ")
+    legalLine_staging_KAM     = _sp("DATASET_SLRP_LEGAL_LINE_KAM")
+    legalLine_staging_KOR     = _sp("DATASET_SLRP_LEGAL_LINE_KOR")
+    legalLine_staging_NAN     = _sp("DATASET_SLRP_LEGAL_LINE_NAN")
+    legalLine_staging_PRG     = _sp("DATASET_SLRP_LEGAL_LINE_PRG")
+    legalLine_staging_SKE     = _sp("DATASET_SLRP_LEGAL_LINE_SKE")
+    legalLine_staging_SUR     = _sp("DATASET_SLRP_LEGAL_LINE_SUR")
     legalLine_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE"
     legalLine_BCGW_SVW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE_SVW"
 
-    legalPoint_staging_CAR    = _sp("slrp_legal_point_CAR")
-    legalPoint_staging_FSJ    = _sp("slrp_legal_point_FSJ")
-    legalPoint_staging_KAM    = _sp("slrp_legal_point_KAM")
-    legalPoint_staging_KOR    = _sp("slrp_legal_point_KOR")
-    legalPoint_staging_NAN    = _sp("slrp_legal_point_NAN")
-    legalPoint_staging_PRG    = _sp("slrp_legal_point_PRG")
-    legalPoint_staging_SKE    = _sp("slrp_legal_point_SKE")
-    legalPoint_staging_SUR    = _sp("slrp_legal_point_SUR")
+    legalPoint_staging_CAR    = _sp("DATASET_SLRP_LEGAL_POINT_CAR")
+    legalPoint_staging_FSJ    = _sp("DATASET_SLRP_LEGAL_POINT_FSJ")
+    legalPoint_staging_KAM    = _sp("DATASET_SLRP_LEGAL_POINT_KAM")
+    legalPoint_staging_KOR    = _sp("DATASET_SLRP_LEGAL_POINT_KOR")
+    legalPoint_staging_NAN    = _sp("DATASET_SLRP_LEGAL_POINT_NAN")
+    legalPoint_staging_PRG    = _sp("DATASET_SLRP_LEGAL_POINT_PRG")
+    legalPoint_staging_SKE    = _sp("DATASET_SLRP_LEGAL_POINT_SKE")
+    legalPoint_staging_SUR    = _sp("DATASET_SLRP_LEGAL_POINT_SUR")
     legalPoint_BCGW           = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT"
     legalPoint_BCGW_SVW       = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT_SVW"
 
-    nonlegalPoly_staging_CAR  = _sp("slrp_non_legal_poly_CAR")
-    nonlegalPoly_staging_FSJ  = _sp("slrp_non_legal_poly_FSJ")
-    nonlegalPoly_staging_KAM  = _sp("slrp_non_legal_poly_KAM")
-    nonlegalPoly_staging_KOR  = _sp("slrp_non_legal_poly_KOR")
-    nonlegalPoly_staging_NAN  = _sp("slrp_non_legal_poly_NAN")
-    nonlegalPoly_staging_PRG  = _sp("slrp_non_legal_poly_PRG")
-    nonlegalPoly_staging_SKE  = _sp("slrp_non_legal_poly_SKE")
-    nonlegalPoly_staging_SUR  = _sp("slrp_non_legal_poly_SUR")
+    nonlegalPoly_staging_CAR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_CAR")
+    nonlegalPoly_staging_FSJ  = _sp("DATASET_SLRP_NON_LEGAL_POLY_FSJ")
+    nonlegalPoly_staging_KAM  = _sp("DATASET_SLRP_NON_LEGAL_POLY_KAM")
+    nonlegalPoly_staging_KOR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_KOR")
+    nonlegalPoly_staging_NAN  = _sp("DATASET_SLRP_NON_LEGAL_POLY_NAN")
+    nonlegalPoly_staging_PRG  = _sp("DATASET_SLRP_NON_LEGAL_POLY_PRG")
+    nonlegalPoly_staging_SKE  = _sp("DATASET_SLRP_NON_LEGAL_POLY_SKE")
+    nonlegalPoly_staging_SUR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_SUR")
     nonlegalPoly_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY"
     nonlegalPoly_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY_SVW"
 
-    nonlegalLine_staging_CAR  = _sp("slrp_non_legal_line_CAR")
-    nonlegalLine_staging_FSJ  = _sp("slrp_non_legal_line_FSJ")
-    nonlegalLine_staging_KAM  = _sp("slrp_non_legal_line_KAM")
-    nonlegalLine_staging_KOR  = _sp("slrp_non_legal_line_KOR")
-    nonlegalLine_staging_NAN  = _sp("slrp_non_legal_line_NAN")
-    nonlegalLine_staging_PRG  = _sp("slrp_non_legal_line_PRG")
-    nonlegalLine_staging_SKE  = _sp("slrp_non_legal_line_SKE")
-    nonlegalLine_staging_SUR  = _sp("slrp_non_legal_line_SUR")
+    nonlegalLine_staging_CAR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_CAR")
+    nonlegalLine_staging_FSJ  = _sp("DATASET_SLRP_NON_LEGAL_LINE_FSJ")
+    nonlegalLine_staging_KAM  = _sp("DATASET_SLRP_NON_LEGAL_LINE_KAM")
+    nonlegalLine_staging_KOR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_KOR")
+    nonlegalLine_staging_NAN  = _sp("DATASET_SLRP_NON_LEGAL_LINE_NAN")
+    nonlegalLine_staging_PRG  = _sp("DATASET_SLRP_NON_LEGAL_LINE_PRG")
+    nonlegalLine_staging_SKE  = _sp("DATASET_SLRP_NON_LEGAL_LINE_SKE")
+    nonlegalLine_staging_SUR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_SUR")
     nonlegalLine_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE"
     nonlegalLine_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE_SVW"
 
-    nonlegalPoint_staging_CAR = _sp("slrp_non_legal_point_CAR")
-    nonlegalPoint_staging_FSJ = _sp("slrp_non_legal_point_FSJ")
-    nonlegalPoint_staging_KAM = _sp("slrp_non_legal_point_KAM")
-    nonlegalPoint_staging_KOR = _sp("slrp_non_legal_point_KOR")
-    nonlegalPoint_staging_NAN = _sp("slrp_non_legal_point_NAN")
-    nonlegalPoint_staging_PRG = _sp("slrp_non_legal_point_PRG")
-    nonlegalPoint_staging_SKE = _sp("slrp_non_legal_point_SKE")
-    nonlegalPoint_staging_SUR = _sp("slrp_non_legal_point_SUR")
+    nonlegalPoint_staging_CAR = _sp("DATASET_SLRP_NON_LEGAL_POINT_CAR")
+    nonlegalPoint_staging_FSJ = _sp("DATASET_SLRP_NON_LEGAL_POINT_FSJ")
+    nonlegalPoint_staging_KAM = _sp("DATASET_SLRP_NON_LEGAL_POINT_KAM")
+    nonlegalPoint_staging_KOR = _sp("DATASET_SLRP_NON_LEGAL_POINT_KOR")
+    nonlegalPoint_staging_NAN = _sp("DATASET_SLRP_NON_LEGAL_POINT_NAN")
+    nonlegalPoint_staging_PRG = _sp("DATASET_SLRP_NON_LEGAL_POINT_PRG")
+    nonlegalPoint_staging_SKE = _sp("DATASET_SLRP_NON_LEGAL_POINT_SKE")
+    nonlegalPoint_staging_SUR = _sp("DATASET_SLRP_NON_LEGAL_POINT_SUR")
     nonlegalPoint_BCGW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT"
     nonlegalPoint_BCGW_SVW    = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT_SVW"
 
@@ -1010,9 +1010,9 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
 
 if __name__ == "__main__":
     # ORIGINAL: _staging_path and _bcgw_path were hardcoded UNC literals.
-    # CHANGE: Loaded from config.json via config_loader.
-    # RISK: If config.json is absent, config_loader raises with a clear message.
+    # CHANGE: Loaded from .env via config_loader.
+    # RISK: If .env is absent, config_loader raises with a clear message.
     # DOWNSTREAM: Only the standalone test invocation is affected.
-    _staging_path = config_loader.get("compare_num_records", "staging_base")
-    _bcgw_path    = config_loader.get("compare_num_records", "bcgw_sde")
+    _staging_path = config_loader.STAGING_BASE
+    _bcgw_path    = config_loader.BCGW_SDE
     run(True, True, True, _staging_path, _bcgw_path)

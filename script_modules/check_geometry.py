@@ -146,24 +146,31 @@ def run(in_fc):
         temp_lyr = arcpy.CreateUniqueName("temp_lyr")
         arcpy.management.MakeFeatureLayer(temp_fc2, temp_lyr)
 
-        # Determine ID field
-        fc_name_lower = fc_name.lower()
-        if 'slrp' in fc_name_lower:
-            if 'boundary' in fc_name_lower:
-                feat_id_field = "STRGC_LAND_RSRCE_PLAN_ID"
-            elif 'non' in fc_name_lower:
-                feat_id_field = "NON_LEGAL_FEAT_ID"
-            else:
-                feat_id_field = "LEGAL_FEAT_ID"
-        elif 'landscape' in fc_name_lower:
-            feat_id_field = "LANDSCAPE_UNIT_ID"
-        elif 'old_growth' in fc_name_lower:
-            if 'non' in fc_name_lower:
-                feat_id_field = "NON_LEGAL_OGMA_INTERNAL_ID"
-            else:
-                feat_id_field = "LEGAL_OGMA_INTERNAL_ID"
-        else:
-            raise ValueError("Could not determine feature ID field.")
+        # ORIGINAL: ID field was inferred by matching keywords in fc_name
+        #   (e.g. 'old_growth', 'slrp', 'landscape'). Broke when the feature
+        #   class had a non-standard name such as 'ogma_legal_to_append'.
+        # CHANGE: Inspect the actual fields present on the feature class.
+        #   Each dataset type has a unique ID field, so presence of the field
+        #   is an unambiguous identifier regardless of the FC name.
+        # RISK: If a future dataset uses a new ID field not in this list, it
+        #   will still raise ValueError — but with a more informative message.
+        # DOWNSTREAM: Only the field-name variable is affected; all cursor
+        #   and flag logic below uses feat_id_field unchanged.
+        id_field_candidates = [
+            "LEGAL_OGMA_INTERNAL_ID",
+            "NON_LEGAL_OGMA_INTERNAL_ID",
+            "LANDSCAPE_UNIT_ID",
+            "LEGAL_FEAT_ID",
+            "NON_LEGAL_FEAT_ID",
+            "STRGC_LAND_RSRCE_PLAN_ID",
+        ]
+        fc_fields = {f.name for f in arcpy.ListFields(in_fc)}
+        feat_id_field = next((f for f in id_field_candidates if f in fc_fields), None)
+        if feat_id_field is None:
+            raise ValueError(
+                f"Could not determine feature ID field for '{fc_name}'. "
+                "Expected one of: " + ", ".join(id_field_candidates)
+            )
 
         # Step 4: Calculate CHECK field
         calc_expr = f"str(!{feat_id_field}!) + '_' + str(!POINT_X!) + '_' + str(!POINT_Y!)"

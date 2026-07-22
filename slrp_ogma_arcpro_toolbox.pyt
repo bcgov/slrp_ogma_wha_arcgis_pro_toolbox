@@ -496,7 +496,7 @@ class CompareNumRecords(object):
             if modules_dir not in sys.path:
                 sys.path.insert(0, modules_dir)
             import config_loader
-            staging_path.value = config_loader.get("compare_num_records", "staging_base")
+            staging_path.value = config_loader.STAGING_BASE
         except Exception:
             pass  # Leave blank if config.json is not yet set up
 
@@ -699,7 +699,7 @@ class CheckInDataset(object):
             if modules_dir not in sys.path:
                 sys.path.insert(0, modules_dir)
             import config_loader
-            update_directory.value = config_loader.get("check_in_dataset", "update_mgmt_base").replace(
+            update_directory.value = config_loader.UPDATE_MGMT_BASE.replace(
                 "UpdateManagement", "UpdateWorkArea\\OldGrowthManagementAreas"
             )
         except Exception:
