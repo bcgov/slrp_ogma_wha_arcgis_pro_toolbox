@@ -681,7 +681,7 @@ class CheckInDataset(object):
         #             are forwarded verbatim to check_in_dataset.run().
 
         update_directory = arcpy.Parameter(
-            displayName="Update Work Area Directory",
+            displayName="Update Work Area Directory Containing Returned FGDB",
             name="update_directory",
             datatype="DEFolder",
             parameterType="Required",
@@ -726,7 +726,40 @@ class CheckInDataset(object):
             parameterType="Required",
             direction="Input")
 
-        return [update_directory, input_feature_class, master_feature_class, update_email_folder]
+        # ORIGINAL: The destination CurrentUpdate folder was derived inside
+        #           check_in_dataset.copy_returned_fgdb() from the module-level
+        #           constant UPDATE_MGMT_BASE (read from .env). That meant
+        #           selecting sandbox inputs in the dialog did NOT redirect the
+        #           copy to the sandbox — the tool always wrote to production.
+        # CHANGE:   Expose the destination CurrentUpdate folder as an explicit
+        #           GUI parameter, defaulted from config_loader.CURRENT. The
+        #           operator can now redirect the destination for sandbox test
+        #           runs (pick TEST_CURRENT) or accept the default for prod.
+        # RISK:     The tool overwrites nothing, but it does rename existing
+        #           GDBs to *_to_delete.gdb inside this folder — selecting the
+        #           wrong destination affects data. Default (production) is
+        #           safe for production use; sandbox users must remember to
+        #           change it.
+        # DOWNSTREAM: execute() reads parameters[4].valueAsText and passes it
+        #           as the new 5th arg to check_in_dataset.run().
+        destination_current_folder = arcpy.Parameter(
+            displayName="Destination CurrentUpdate Folder (where the Returned FGDB is copied)",
+            name="destination_current_folder",
+            datatype="DEFolder",
+            parameterType="Required",
+            direction="Input")
+        try:
+            toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+            modules_dir = os.path.join(toolbox_dir, 'script_modules')
+            if modules_dir not in sys.path:
+                sys.path.insert(0, modules_dir)
+            import config_loader
+            destination_current_folder.value = config_loader.CURRENT
+        except Exception:
+            pass  # Leave blank if .env is not yet set up
+
+        return [update_directory, input_feature_class, master_feature_class,
+                update_email_folder, destination_current_folder]
 
     def isLicensed(self):
         return True
@@ -740,10 +773,11 @@ class CheckInDataset(object):
     def execute(self, parameters, messages):
         # Resolve full catalog paths (check_in_dataset derives GDB/folder
         # paths from these strings via os.path operations).
-        update_dir = parameters[0].valueAsText
-        in_dataset = arcpy.Describe(parameters[1].value).catalogPath
-        master_dataset = arcpy.Describe(parameters[2].value).catalogPath
-        email_folder = parameters[3].valueAsText
+        update_dir       = parameters[0].valueAsText
+        in_dataset       = arcpy.Describe(parameters[1].value).catalogPath
+        master_dataset   = arcpy.Describe(parameters[2].value).catalogPath
+        email_folder     = parameters[3].valueAsText
+        dest_current_dir = parameters[4].valueAsText
 
         # Ensure the script_modules directory is on sys.path so check_in_dataset
         # (and, transitively, attribute_qa_v8) can be imported.
@@ -755,7 +789,8 @@ class CheckInDataset(object):
         import check_in_dataset
         importlib.reload(check_in_dataset)
 
-        check_in_dataset.run(update_dir, in_dataset, master_dataset, email_folder)
+        check_in_dataset.run(update_dir, in_dataset, master_dataset,
+                             email_folder, dest_current_dir)
 
     def postExecute(self, parameters):
         return

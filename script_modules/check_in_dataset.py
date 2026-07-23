@@ -25,6 +25,16 @@ import os
 import shutil
 import sys
 
+# Ensure script_modules/ is on sys.path so config_loader (and other peer
+# modules) can be found whether this file is run standalone or imported from
+# the .pyt toolbox.  __file__ lives in script_modules/, so its dirname IS the
+# correct directory — no subdirectory navigation needed.
+_modules_dir = os.path.dirname(os.path.abspath(__file__))
+if _modules_dir not in sys.path:
+    sys.path.insert(0, _modules_dir)
+
+import config_loader
+
 
 # ---------------------------------------------------------------------------
 # Module-level constants
@@ -48,7 +58,14 @@ TYPE_TO_FOLDER = {
 }
 
 # Root of UpdateManagement on spatialfiles3.
-UPDATE_MGMT_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement"
+# Loaded from .env via config_loader — do NOT hardcode this path here.
+# NOTE: This constant is retained as an informational reference only. It is
+# NO LONGER used to derive the copy destination in copy_returned_fgdb().
+# The destination CurrentUpdate folder is now supplied by the caller (the
+# CheckInDataset toolbox parameter, or the standalone __main__ block) so the
+# tool cannot silently write to production when the operator has selected
+# sandbox inputs. See the incident on 2026-07-23 that motivated the change.
+UPDATE_MGMT_BASE = config_loader.UPDATE_MGMT_BASE
 
 
 # ---------------------------------------------------------------------------
@@ -91,7 +108,7 @@ def list_update_directory_files(update_dir):
 
     # --- Returned GDB ---
     # Expectation (set by the user): the update directory contains exactly
-    # one .gdb. We don't enforce a strict naming pattern — actual files in
+    # one .gdb. Doesnt enforce a strict naming pattern — actual files in
     # the wild use varying conventions (e.g. _Update_YYYYMMDD_Returned_YYYYMMDD,
     # _update_YYYYMMDD, _returned_YYYYMMDD). Just pick the single .gdb.
     gdbs_found = [
@@ -234,8 +251,9 @@ def _derive_type_token(gdb_path):
     return None
 
 
-def copy_returned_fgdb(returned_gdb_path, type_token):
-    """Copy the entire Returned FGDB to UpdateManagement\\<Type>\\CurrentUpdate.
+def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
+    """Copy the entire Returned FGDB into *dest_current_dir* (a CurrentUpdate
+    folder chosen by the caller).
 
     Uses arcpy.management.Copy() which creates a fresh copy and leaves the
     source completely unmodified (no schema locks acquired on the source GDB).
@@ -243,7 +261,15 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
     Parameters
     ----------
     returned_gdb_path : str  Full path to the Returned FGDB folder.
-    type_token        : str  One of OGMA / LU / SLRP / WHA.
+    dest_current_dir  : str  Full path to the destination CurrentUpdate folder.
+                              Supplied by the caller (toolbox parameter or
+                              standalone __main__) so the destination is
+                              always driven by an explicit user choice, never
+                              by an implicit .env constant.
+    type_token        : str  One of OGMA / LU / SLRP / WHA. Used ONLY for
+                              logging so the operator can confirm the tool
+                              correctly recognised the dataset type; the
+                              destination path no longer depends on it.
 
     Returns
     -------
@@ -251,7 +277,6 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
 
     Raises
     ------
-    KeyError   If type_token is not in TYPE_TO_FOLDER.
     Exception  Re-raises arcpy errors so the caller can report them.
     """
     arcpy.AddMessage("")
@@ -259,13 +284,14 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
     arcpy.AddMessage("COPYING RETURNED FGDB")
     arcpy.AddMessage("=" * 60)
 
-    type_folder = TYPE_TO_FOLDER[type_token]
-    dest_dir = os.path.join(UPDATE_MGMT_BASE, type_folder, "CurrentUpdate")
+    dest_dir = dest_current_dir
     gdb_basename = os.path.basename(returned_gdb_path)
     dest_gdb_path = os.path.join(dest_dir, gdb_basename)
 
-    arcpy.AddMessage("Source : " + returned_gdb_path)
-    arcpy.AddMessage("Dest   : " + dest_gdb_path)
+    arcpy.AddMessage("Detected dataset type : " + type_token)
+    arcpy.AddMessage("Source                : " + returned_gdb_path)
+    arcpy.AddMessage("Destination folder    : " + dest_dir)
+    arcpy.AddMessage("Destination GDB       : " + dest_gdb_path)
 
     if not os.path.isdir(dest_dir):
         arcpy.AddError("Destination directory does not exist: " + dest_dir)
@@ -293,6 +319,7 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
     #           and the "_to_delete" incumbent. Any later step that assumes exactly one
     #           .gdb in CurrentUpdate must skip "*_to_delete.gdb". CheckInDataset.md
     #           Step 5 still documents the old "overwritten" behavior — separate doc fix.
+    flagged_gdbs = []  # list of (original_name, flagged_name) tuples for the summary block
     for entry in os.listdir(dest_dir):
         entry_path = os.path.join(dest_dir, entry)
         if (entry.lower().endswith(".gdb")
@@ -332,9 +359,29 @@ def copy_returned_fgdb(returned_gdb_path, type_token):
                     "clear it."
                 )
                 raise
+            flagged_gdbs.append((entry, flagged_name))
             arcpy.AddMessage(
-                "Flagged existing GDB for later deletion: " + entry + "  ->  " + flagged_name
+                "  Renamed in place:  " + entry + "  ->  " + flagged_name
             )
+
+    if flagged_gdbs:
+        arcpy.AddMessage("")
+        arcpy.AddMessage("-" * 60)
+        arcpy.AddMessage("EXISTING GDB(s) FLAGGED FOR LATER DELETION")
+        arcpy.AddMessage("-" * 60)
+        arcpy.AddMessage(
+            "The previous CurrentUpdate GDB(s) were renamed in place (NOT moved). "
+            "They are still located in the destination CurrentUpdate folder shown "
+            "below, alongside the newly checked-in GDB. The DRM should review and "
+            "delete them manually once the new check-in is confirmed good."
+        )
+        arcpy.AddMessage("")
+        arcpy.AddMessage("Location: " + dest_dir)
+        arcpy.AddMessage("")
+        arcpy.AddMessage("Flagged GDBs (full paths):")
+        for _, flagged_name in flagged_gdbs:
+            arcpy.AddMessage("  " + os.path.join(dest_dir, flagged_name))
+        arcpy.AddMessage("-" * 60)
 
     # Copy with overwrite explicitly disabled so any residual name collision raises
     # loudly rather than silently replacing data. Restore the prior value afterward so
@@ -407,17 +454,21 @@ def copy_reports_to_email_folder(qa_report_txt_path, topology_report_path, email
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(update_dir, in_dataset, master_dataset, email_folder):
+def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     """Orchestrate the full check-in workflow.
 
     Parameters
     ----------
-    update_dir     : str  Full path to the UpdateWorkArea\\<Type> directory.
-    in_dataset     : str  Full catalog path to the feature class being checked in.
-    master_dataset : str  Full catalog path to the master/replica reference FC.
-    email_folder   : str  Full path to the existing UpdateEmail folder for this
-                          request (its basename is reused as the destination
-                          subfolder name).
+    update_dir       : str  Full path to the UpdateWorkArea\\<Type> directory.
+    in_dataset       : str  Full catalog path to the feature class being checked in.
+    master_dataset   : str  Full catalog path to the master/replica reference FC.
+    email_folder     : str  Full path to the existing UpdateEmail folder for this
+                            request (its basename is reused as the destination
+                            subfolder name).
+    dest_current_dir : str  Full path to the destination CurrentUpdate folder
+                            (where the Returned FGDB will be copied). Supplied
+                            explicitly by the caller so sandbox / production
+                            destinations are never confused.
 
     Flow
     ----
@@ -432,10 +483,11 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     arcpy.AddMessage("")
     arcpy.AddMessage("*" * 60)
     arcpy.AddMessage("CHECK-IN DATASET WORKFLOW")
-    arcpy.AddMessage("Update directory : " + update_dir)
-    arcpy.AddMessage("Input FC         : " + in_dataset)
-    arcpy.AddMessage("Master FC        : " + master_dataset)
-    arcpy.AddMessage("Update Email dir : " + email_folder)
+    arcpy.AddMessage("Update directory      : " + update_dir)
+    arcpy.AddMessage("Input FC              : " + in_dataset)
+    arcpy.AddMessage("Master FC             : " + master_dataset)
+    arcpy.AddMessage("Update Email dir      : " + email_folder)
+    arcpy.AddMessage("Destination CurrentUp : " + dest_current_dir)
     arcpy.AddMessage("*" * 60)
 
     arcpy.SetProgressor("step", "Listing update directory files...", 0, 6, 1)
@@ -503,7 +555,7 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     arcpy.SetProgressorLabel("Step 5 of 6: Copying Returned FGDB...")
     arcpy.SetProgressorPosition()
     try:
-        copy_returned_fgdb(returned_gdb_path, type_token)
+        copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token)
     except Exception as exc:
         arcpy.AddError("FGDB copy failed: " + str(exc))
         return
@@ -526,3 +578,60 @@ def run(update_dir, in_dataset, master_dataset, email_folder):
     arcpy.AddMessage("*" * 60)
     arcpy.AddMessage("CHECK-IN COMPLETE.")
     arcpy.AddMessage("*" * 60)
+
+
+# ---------------------------------------------------------------------------
+# Standalone execution
+# ---------------------------------------------------------------------------
+
+if __name__ == "__main__":
+    # ------------------------------------------------------------------
+    # Standalone execution — two modes:
+    #
+    # TESTING (no arguments):
+    #   python check_in_dataset.py
+    #   Reads all five paths from the TEST_* keys in .env, including
+    #   TEST_CURRENT which becomes the destination CurrentUpdate folder.
+    #   This guarantees standalone test runs write to the sandbox, never
+    #   to production.
+    #
+    # EXPLICIT (five arguments):
+    #   python check_in_dataset.py \
+    #       <update_dir> <in_dataset> <master_dataset> \
+    #       <email_folder> <dest_current_dir>
+    #   Uses the supplied paths directly, ignoring TEST_* keys.
+    # ------------------------------------------------------------------
+    if len(sys.argv) == 1:
+        # Testing mode — load paths from .env TEST_* keys.
+        # NOTE: TEST_CURRENT / TEST_MASTER are folder paths in .env; run()
+        # expects feature class catalog paths for in_dataset / master_dataset.
+        # Adjust the two lines below if your test FCs live at a deeper path.
+        update_dir       = config_loader.TEST_UPDATEWORKAREA
+        in_dataset       = config_loader.TEST_CURRENT
+        master_dataset   = config_loader.TEST_MASTER
+        email_folder     = config_loader.TEST_EMAIL_FOLDER
+        dest_current_dir = config_loader.TEST_CURRENT
+        print("Standalone test mode — paths loaded from .env TEST_* keys:")
+        print("  update_dir      :", update_dir)
+        print("  in_dataset      :", in_dataset)
+        print("  master_dataset  :", master_dataset)
+        print("  email_folder    :", email_folder)
+        print("  dest_current_dir:", dest_current_dir)
+    elif len(sys.argv) == 6:
+        update_dir       = sys.argv[1]
+        in_dataset       = sys.argv[2]
+        master_dataset   = sys.argv[3]
+        email_folder     = sys.argv[4]
+        dest_current_dir = sys.argv[5]
+    else:
+        print(
+            "Usage:\n"
+            "  python check_in_dataset.py\n"
+            "      (no args — uses TEST_* paths from .env)\n"
+            "  python check_in_dataset.py"
+            " <update_dir> <in_dataset> <master_dataset>"
+            " <email_folder> <dest_current_dir>"
+        )
+        sys.exit(1)
+
+    run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir)
