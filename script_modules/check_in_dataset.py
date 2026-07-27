@@ -6,16 +6,29 @@
 #
 # Workflow steps (in order):
 #   1. List files present in the UpdateWorkArea directory (checklist)
-#   2. Run Attribute QA/QC on the chosen feature class
-#   3. Display topology report rows (user determines pass/fail)
-#   4. Copy the Returned FGDB to UpdateManagement\<Type>\CurrentUpdate
-#   5. Copy QA reports and topology report to Update_Emails destination folder
+#   2. Derive dataset type from the Returned GDB name
+#      (OGMA / LU / SLRP / WHA) — abort if the name matches no known type
+#   3. Run Attribute QA/QC on the chosen feature class
+#      (IF ERROR — copy steps do NOT run if QA raises)
+#   4. Display topology report rows
+#      (informational only — user determines pass/fail)
+#   5. Rename (not delete) any existing GDBs in the destination CurrentUpdate folder to
+#      "<name>_to_delete.gdb" IN PLACE, then copy the Returned FGDB from Update Workarea
+#      alongside them. Nothing is deleted or overwritten by this tool.
+#      Destination CurrentUpdate folder is supplied explicitly by the caller
+#      (GUI parameter or standalone arg) — it is never derived from a
+#      hardcoded/production path.
+#   6. Copy QA reports (.txt / .json / .html) and topology report to the
+#      Update_Emails destination folder. The topology report is whatever file
+#      was matched by the wildcard in Step 1 (any .csv or .txt whose name
+#      contains 'top').
 #
 # IMPORTANT — read-only on source data:
 #   This script MUST NOT modify, lock, or write to the source FGDB in any way.
 #   It copies data out; it never edits data in.
 #
 # Created: 2026-06-04
+# Updated: 2026-07-23
 # ===========================================================================
 
 import arcpy
@@ -64,7 +77,7 @@ TYPE_TO_FOLDER = {
 # The destination CurrentUpdate folder is now supplied by the caller (the
 # CheckInDataset toolbox parameter, or the standalone __main__ block) so the
 # tool cannot silently write to production when the operator has selected
-# sandbox inputs. See the incident on 2026-07-23 that motivated the change.
+# sandbox inputs. 
 UPDATE_MGMT_BASE = config_loader.UPDATE_MGMT_BASE
 
 
@@ -81,13 +94,16 @@ def list_update_directory_files(update_dir):
     - Returned FGDB  : the single .gdb folder in the update directory
                        (naming convention varies in practice; the user has
                        confirmed there is only ever one .gdb per update dir)
-    - QA/QC report(s): one or more *.txt files
-    - Topology report: topology_report.csv
+    - QA/QC report(s): one or more *.txt files (must NOT contain 'top' in
+                       the filename, to avoid collision with topology reports)
+    - Topology report: any .csv or .txt file whose name contains 'top'
+                       (case-insensitive), e.g. topology_report.csv,
+                       TopologyReport.csv, topo_report.txt, Top Report.csv
 
     Returns a dict with keys:
         'returned_gdb'    : full path to the Returned GDB folder, or None
         'qa_reports'      : list of full .txt paths (may be empty)
-        'topology_report' : full path to topology_report.csv, or None
+        'topology_report' : full path to the matched topology file, or None
     """
     arcpy.AddMessage("")
     arcpy.AddMessage("=" * 60)
@@ -107,8 +123,7 @@ def list_update_directory_files(update_dir):
     entries = os.listdir(update_dir)
 
     # --- Returned GDB ---
-    # Expectation (set by the user): the update directory contains exactly
-    # one .gdb. Doesnt enforce a strict naming pattern — actual files in
+    # The update directory contains exactly one .gdb. Doesnt enforce a strict naming pattern — actual files in
     # the wild use varying conventions (e.g. _Update_YYYYMMDD_Returned_YYYYMMDD,
     # _update_YYYYMMDD, _returned_YYYYMMDD). Just pick the single .gdb.
     gdbs_found = [
@@ -127,22 +142,47 @@ def list_update_directory_files(update_dir):
             + ", ".join(os.path.basename(p) for p in gdbs_found)
         )
 
+    # --- Topology report ---
+    # Match any .csv or .txt whose name contains 'top' (case-insensitive).
+    # Detected before QA reports so topology .txt files can be excluded from
+    # the QA report scan below.
+    topo_candidates = [
+        os.path.join(update_dir, e)
+        for e in entries
+        if e.lower().endswith((".csv", ".txt"))
+        and "top" in e.lower()
+        and os.path.isfile(os.path.join(update_dir, e))
+    ]
+    if len(topo_candidates) == 1:
+        result["topology_report"] = topo_candidates[0]
+        arcpy.AddMessage("  [PRESENT] Topology report: " + os.path.basename(topo_candidates[0]))
+    elif len(topo_candidates) > 1:
+        result["topology_report"] = topo_candidates[0]
+        arcpy.AddWarning(
+            "  [AMBIGUOUS] Multiple topology report candidates found: "
+            + ", ".join(os.path.basename(p) for p in topo_candidates)
+            + " — using first match: " + os.path.basename(topo_candidates[0])
+        )
+    else:
+        arcpy.AddWarning(
+            "  [MISSING] Topology report  "
+            "(no .csv or .txt whose name contains 'top' found in update directory)"
+        )
+
     # --- QA/QC reports (.txt) ---
+    # Exclude any .txt already matched as the topology report.
+    topo_paths_set = set(topo_candidates)
     for entry in entries:
         full_path = os.path.join(update_dir, entry)
-        if entry.lower().endswith(".txt") and os.path.isfile(full_path):
+        if (
+            entry.lower().endswith(".txt")
+            and os.path.isfile(full_path)
+            and full_path not in topo_paths_set
+        ):
             result["qa_reports"].append(full_path)
             arcpy.AddMessage("  [PRESENT] QA/QC report   : " + entry)
     if not result["qa_reports"]:
         arcpy.AddWarning("  [MISSING] QA/QC report   (expected: *_attribute_check_*.txt)")
-
-    # --- Topology report ---
-    topo_path = os.path.join(update_dir, "topology_report.csv")
-    if os.path.isfile(topo_path):
-        result["topology_report"] = topo_path
-        arcpy.AddMessage("  [PRESENT] Topology report: topology_report.csv")
-    else:
-        arcpy.AddWarning("  [MISSING] Topology report: topology_report.csv")
 
     arcpy.AddMessage("=" * 60)
     return result
@@ -198,13 +238,22 @@ def run_attribute_qa(in_dataset_path, master_dataset_path):
 # Step 4: Display topology report
 # ---------------------------------------------------------------------------
 
-def read_topology_report(update_dir):
-    """Read topology_report.csv from *update_dir* and print every row as a
-    message. The user is responsible for determining pass/fail.
+def read_topology_report(topo_path):
+    """Print every row of the topology report file to the tool messages panel.
+    The user is responsible for determining pass/fail.
 
-    The file is encoded in UTF-16 LE (exported by ArcGIS Pro topology viewer).
-    The 'utf-16' codec auto-detects the BOM, so no explicit byte-order mark
-    handling is required.
+    Parameters
+    ----------
+    topo_path : str or None
+        Full path to the topology report file as resolved by
+        list_update_directory_files().  Pass None (or a missing path) to
+        skip silently with a warning.
+
+    Encoding
+    --------
+    ArcGIS Pro topology exports are UTF-16 LE.  Other tools may produce
+    UTF-8 or UTF-8-with-BOM.  The function tries utf-16 first, then falls
+    back to utf-8-sig (handles BOM), then plain utf-8.
 
     Returns the number of data rows found (0 if file absent or empty).
     """
@@ -213,20 +262,31 @@ def read_topology_report(update_dir):
     arcpy.AddMessage("TOPOLOGY REPORT")
     arcpy.AddMessage("=" * 60)
 
-    topo_path = os.path.join(update_dir, "topology_report.csv")
-    if not os.path.isfile(topo_path):
-        arcpy.AddWarning("topology_report.csv not found in " + update_dir + " — skipping.")
+    if not topo_path or not os.path.isfile(topo_path):
+        arcpy.AddWarning("Topology report not found — skipping.")
         return 0
 
+    arcpy.AddMessage("File: " + topo_path)
     row_count = 0
-    try:
-        with open(topo_path, encoding="utf-16") as f:
-            reader = csv.reader(f)
-            for row in reader:
-                arcpy.AddMessage("  " + ", ".join(row))
-                row_count += 1
-    except Exception as exc:
-        arcpy.AddWarning("Could not read topology_report.csv: " + str(exc))
+    for encoding in ("utf-16", "utf-8-sig", "utf-8"):
+        try:
+            with open(topo_path, encoding=encoding) as f:
+                reader = csv.reader(f)
+                for row in reader:
+                    arcpy.AddMessage("  " + ", ".join(row))
+                    row_count += 1
+            break  # succeeded — stop trying encodings
+        except (UnicodeDecodeError, UnicodeError):
+            row_count = 0
+            continue
+        except Exception as exc:
+            arcpy.AddWarning("Could not read " + os.path.basename(topo_path) + ": " + str(exc))
+            return 0
+    else:
+        arcpy.AddWarning(
+            "Could not decode " + os.path.basename(topo_path)
+            + " as utf-16, utf-8-sig, or utf-8 — skipping."
+        )
         return 0
 
     arcpy.AddMessage("Total rows in topology report: " + str(row_count))
@@ -547,7 +607,7 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     # ------------------------------------------------------------------
     arcpy.SetProgressorLabel("Step 4 of 6: Reading topology report...")
     arcpy.SetProgressorPosition()
-    read_topology_report(update_dir)
+    read_topology_report(checklist["topology_report"])
 
     # ------------------------------------------------------------------
     # Step 5: Copy Returned FGDB
