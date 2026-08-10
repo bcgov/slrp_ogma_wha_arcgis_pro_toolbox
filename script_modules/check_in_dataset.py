@@ -416,7 +416,11 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
                     "  To fix: remove any layers from this GDB from the map, close "
                     "any other application that has it open, then re-run this tool. "
                     "If the lock persists, closing and reopening ArcGIS Pro will "
-                    "clear it."
+                    "clear it.\n"
+                    "  NOTE: This is a bug in the process of being fixed. Try to "
+                    "close and reopen ArcGIS Pro and run the tool again. Please "
+                    "note the behavior and notify the owner of the tool to assist "
+                    "in troubleshooting."
                 )
                 raise
             flagged_gdbs.append((entry, flagged_name))
@@ -566,11 +570,29 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     arcpy.SetProgressorPosition()
     returned_gdb_path = checklist["returned_gdb"]
     if returned_gdb_path is None:
-        arcpy.AddError(
-            "No (or more than one) .gdb found in the update directory. "
-            "Expected exactly one .gdb in: " + update_dir + ". "
-            "Aborting check-in."
-        )
+        # Re-scan to distinguish "none" vs "more than one" for a clearer message.
+        try:
+            gdbs_found = [
+                e for e in os.listdir(update_dir)
+                if e.lower().endswith(".gdb")
+                and os.path.isdir(os.path.join(update_dir, e))
+            ]
+        except OSError:
+            gdbs_found = []
+
+        if len(gdbs_found) > 1:
+            arcpy.AddError(
+                "There is more than one GDB in the " + update_dir + " directory "
+                "(" + ", ".join(gdbs_found) + "). "
+                "Please copy any backups to a safe place or delete them. "
+                "Ensure there is only one gdb in the directory and then rerun this tool. "
+                "Aborting check-in."
+            )
+        else:
+            arcpy.AddError(
+                "No .gdb found in the update directory: " + update_dir + ". "
+                "Expected exactly one .gdb in this directory. Aborting check-in."
+            )
         return
 
     type_token = _derive_type_token(returned_gdb_path)
