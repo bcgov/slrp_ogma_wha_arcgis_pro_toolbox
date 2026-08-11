@@ -1,3 +1,4 @@
+import datetime
 import os
 from collections import Counter
 import arcpy
@@ -33,10 +34,109 @@ def run(in_fc):
         )
         return
 
+    # ---------------- REPORT SETUP ----------------
+    # Walk up from the FC's catalog path to find the containing .gdb; the
+    # Update Work Area folder is the GDB's parent. Handles FCs directly under
+    # the GDB (no Feature Dataset) as well as FCs inside a FDS.
+    def _derive_update_folder(catalog_path):
+        p = os.path.dirname(catalog_path)
+        while p:
+            if p.lower().endswith(".gdb"):
+                return os.path.dirname(p)
+            parent = os.path.dirname(p)
+            if parent == p:
+                return None
+            p = parent
+        return None
+
+    update_folder = _derive_update_folder(desc.catalogPath)
+    report_filename = f"{fc_name}_geometry_check_{datetime.date.today()}.txt"
+    report_state = {
+        "path": os.path.join(update_folder, report_filename) if update_folder else None
+    }
+
+    def write_header():
+        header_lines = [
+            "=" * 70,
+            "GEOMETRY CHECK REPORT",
+            "=" * 70,
+            f"Feature Class : {fc_name}",
+            f"Dataset Path  : {desc.catalogPath}",
+            f"Shape Type    : {desc.shapeType}",
+            f"Run Timestamp : {datetime.datetime.now().strftime('%Y-%m-%dT%H:%M:%S')}",
+            f"Operator IDIR : {os.environ.get('USERNAME', '')}",
+            "=" * 70,
+            "",
+        ]
+        # Try the derived Update Work Area folder first; on failure, fall back
+        # once to arcpy.env.scratchFolder and warn the user where the report
+        # actually ended up.
+        for attempt in ("primary", "fallback"):
+            if report_state["path"] is None:
+                report_state["path"] = os.path.join(
+                    arcpy.env.scratchFolder, report_filename
+                )
+                arcpy.AddWarning(
+                    "Could not derive an Update Work Area folder from the input "
+                    "feature class path. Geometry report will be written to the "
+                    "scratch folder instead: " + report_state["path"]
+                )
+            try:
+                with open(report_state["path"], "w", encoding="utf-8") as fh:
+                    fh.write("\n".join(header_lines))
+                return
+            except OSError as exc:
+                if attempt == "primary":
+                    arcpy.AddWarning(
+                        "Could not write geometry report to " + report_state["path"]
+                        + " (" + str(exc) + "). Falling back to scratch folder."
+                    )
+                    report_state["path"] = os.path.join(
+                        arcpy.env.scratchFolder, report_filename
+                    )
+                else:
+                    arcpy.AddWarning(
+                        "Could not write geometry report to scratch folder either: "
+                        + str(exc) + ". Geometry checks will still run, but no "
+                        "report file will be produced."
+                    )
+                    report_state["path"] = None
+                    return
+
+    def write_report(section_title, lines):
+        if report_state["path"] is None:
+            return
+        block = [
+            "",
+            "-" * 60,
+            section_title,
+            "-" * 60,
+        ] + list(lines) + [""]
+        try:
+            with open(report_state["path"], "a", encoding="utf-8") as fh:
+                fh.write("\n".join(block))
+        except OSError as exc:
+            arcpy.AddWarning(
+                "Could not append '" + section_title + "' section to geometry "
+                "report at " + report_state["path"] + ": " + str(exc)
+            )
+
+    # msg/warn mirror arcpy console output into the report section lines.
+    def msg(lines, text):
+        arcpy.AddMessage(text)
+        lines.append(text)
+
+    def warn(lines, text):
+        arcpy.AddWarning(text)
+        lines.append("[WARNING] " + text)
+
+    write_header()
+
     # ---------------- FUNCTIONS ----------------
 
     def repair_geometry(in_fc):
-        arcpy.AddMessage("Repairing geometry where MODIFICATION_TYPE is not null...")
+        lines = []
+        msg(lines, "Repairing geometry where MODIFICATION_TYPE is not null...")
 
         lyr = arcpy.CreateUniqueName("fc_lyr")
         where_clause = "MODIFICATION_TYPE IS NOT NULL"
@@ -44,13 +144,15 @@ def run(in_fc):
         arcpy.management.MakeFeatureLayer(in_fc, lyr, where_clause)
         arcpy.management.RepairGeometry(lyr)
 
-        arcpy.AddMessage("✔ Geometry repair complete")
+        msg(lines, "✔ Geometry repair complete")
+        write_report("REPAIR GEOMETRY", lines)
 
 
     def identify_very_small_polygons_or_line_segments(in_fc):
         desc = arcpy.Describe(in_fc)
+        lines = []
 
-        arcpy.AddMessage("Identifying small features where MODIFICATION_TYPE is not null...")
+        msg(lines, "Identifying small features where MODIFICATION_TYPE is not null...")
 
         fc_lyr = arcpy.CreateUniqueName("fc_lyr")
         where_clause = "MODIFICATION_TYPE IS NOT NULL"
@@ -58,7 +160,7 @@ def run(in_fc):
         arcpy.management.MakeFeatureLayer(in_fc, fc_lyr, where_clause)
 
         if desc.shapeType == "Polygon":
-            arcpy.AddMessage("Checking for polygons with area <= 0.5 ha...")
+            msg(lines, "Checking for polygons with area <= 0.5 ha...")
 
             temp_fc = os.path.join(fds_path, f"temp_sliver_polygons_{fc_name}")
             temp_lyr = arcpy.CreateUniqueName("temp_lyr")
@@ -77,15 +179,16 @@ def run(in_fc):
             sliver_count = int(arcpy.management.GetCount(temp_lyr)[0])
 
             if sliver_count > 0:
-                arcpy.AddWarning(f"There are {sliver_count} small polygon features (<= 0.5 ha).")
-                arcpy.AddWarning(f"Review: temp_sliver_polygons_{fc_name}")
+                warn(lines, f"There are {sliver_count} small polygon features (<= 0.5 ha).")
+                warn(lines, f"Review: temp_sliver_polygons_{fc_name}")
+                lines.append(f"Review dataset path: {temp_fc}")
             else:
-                arcpy.AddMessage("No sliver polygons found.")
+                msg(lines, "No sliver polygons found.")
 
             arcpy.management.Delete(temp_lyr)
 
         else:
-            arcpy.AddMessage("Checking for short line segments (< 1 meter)...")
+            msg(lines, "Checking for short line segments (< 1 meter)...")
 
             temp_fc = os.path.join(fds_path, f"temp_short_line_segments_{fc_name}")
             temp_lyr = arcpy.CreateUniqueName("temp_lyr")
@@ -104,19 +207,22 @@ def run(in_fc):
             short_segment_count = int(arcpy.management.GetCount(temp_lyr)[0])
 
             if short_segment_count > 0:
-                arcpy.AddWarning(f"There are {short_segment_count} short line segments (< 1 meter).")
-                arcpy.AddWarning(f"Review: temp_short_line_segments_{fc_name}")
+                warn(lines, f"There are {short_segment_count} short line segments (< 1 meter).")
+                warn(lines, f"Review: temp_short_line_segments_{fc_name}")
+                lines.append(f"Review dataset path: {temp_fc}")
             else:
-                arcpy.AddMessage("No short segments found.")
+                msg(lines, "No short segments found.")
 
             arcpy.management.Delete(temp_lyr)
 
         arcpy.management.Delete(fc_lyr)
+        write_report("SMALL FEATURES (SLIVER POLYGONS OR SHORT LINES)", lines)
 
 
     def check_for_multiple_identical_vertices(in_fc):
-        arcpy.AddMessage("Checking for identical vertices (>= 4) in modified features...")
-        arcpy.AddMessage("Features with 4+ identical vertices will not load to BCGW.")
+        lines = []
+        msg(lines, "Checking for identical vertices (>= 4) in modified features...")
+        msg(lines, "Features with 4+ identical vertices will not load to BCGW.")
 
         fc_lyr = arcpy.CreateUniqueName("fc_lyr")
         where_clause = "MODIFICATION_TYPE IS NOT NULL"
@@ -130,12 +236,12 @@ def run(in_fc):
         if arcpy.Exists(temp_fc1):
             arcpy.management.Delete(temp_fc1)
 
-        arcpy.AddMessage(" - Creating temp dataset of modified features")
+        msg(lines, " - Creating temp dataset of modified features")
 
         arcpy.management.CopyFeatures(fc_lyr, temp_fc1)
 
         # Step 2: Convert to points
-        arcpy.AddMessage(" - Converting features to vertices")
+        msg(lines, " - Converting features to vertices")
         arcpy.management.FeatureVerticesToPoints(temp_fc1, temp_fc2, "ALL")
 
         # Step 3: Add XY + fields
@@ -167,17 +273,21 @@ def run(in_fc):
         fc_fields = {f.name for f in arcpy.ListFields(in_fc)}
         feat_id_field = next((f for f in id_field_candidates if f in fc_fields), None)
         if feat_id_field is None:
+            warn(lines, "Could not determine feature ID field. Expected one of: "
+                 + ", ".join(id_field_candidates))
+            write_report("DUPLICATE VERTICES (>= 4 IDENTICAL POINTS)", lines)
             raise ValueError(
                 f"Could not determine feature ID field for '{fc_name}'. "
                 "Expected one of: " + ", ".join(id_field_candidates)
             )
+        lines.append(f"Feature ID field used: {feat_id_field}")
 
         # Step 4: Calculate CHECK field
         calc_expr = f"str(!{feat_id_field}!) + '_' + str(!POINT_X!) + '_' + str(!POINT_Y!)"
         arcpy.management.CalculateField(temp_lyr, "CHECK", calc_expr, "PYTHON3")
 
         # Step 5: Use modern cursor (FAST)
-        arcpy.AddMessage(" - Analyzing vertex duplication")
+        msg(lines, " - Analyzing vertex duplication")
 
         with arcpy.da.SearchCursor(temp_lyr, ["CHECK"]) as cursor:
             values = [row[0] for row in cursor]
@@ -201,21 +311,26 @@ def run(in_fc):
         point_count = int(arcpy.management.GetCount(temp_lyr)[0])
 
         if point_count > 0:
-            arcpy.AddWarning("There are instances of 4+ identical vertices!")
-            arcpy.AddWarning(f"Review: temp_identical_vertex_check_Step2_{fc_name}")
+            warn(lines, "There are instances of 4+ identical vertices!")
+            warn(lines, f"Review: temp_identical_vertex_check_Step2_{fc_name}")
+            lines.append(f"Flagged vertex clusters: {len(flagged_points)}")
+            lines.append(f"Flagged points remaining in temp dataset: {point_count}")
+            lines.append(f"Review dataset path: {temp_fc2}")
         else:
-            arcpy.AddMessage("No duplicate vertices found.")
+            msg(lines, "No duplicate vertices found.")
 
         # Cleanup
         arcpy.management.Delete(fc_lyr)
         arcpy.management.Delete(temp_lyr)
 
-        arcpy.AddMessage("----- Vertex check complete -----")
+        msg(lines, "----- Vertex check complete -----")
+        write_report("DUPLICATE VERTICES (>= 4 IDENTICAL POINTS)", lines)
 
 
     def check_for_max_vertices(in_fc):
-        arcpy.AddMessage("Checking vertex count for modified features...")
-        arcpy.AddMessage("All features must have < 524,000 vertices for BCGW.")
+        lines = []
+        msg(lines, "Checking vertex count for modified features...")
+        msg(lines, "All features must have < 524,000 vertices for BCGW.")
 
         fc_lyr = arcpy.CreateUniqueName("fc_lyr")
         where_clause = "MODIFICATION_TYPE IS NOT NULL"
@@ -234,23 +349,25 @@ def run(in_fc):
         if over_vertex_limit_count > 0:
             arcpy.conversion.FeatureClassToFeatureClass(fc_lyr, fds_path, f"temp_{fc_name}_OVER_MAX_VERTICES")
 
-            arcpy.AddWarning(f"There are {over_vertex_limit_count} features over the vertex limit.")
-            arcpy.AddWarning("Features must have fewer than 524,000 vertices.")
-            arcpy.AddWarning(f"Review: temp_{fc_name}_OVER_MAX_VERTICES")
+            warn(lines, f"There are {over_vertex_limit_count} features over the vertex limit.")
+            warn(lines, "Features must have fewer than 524,000 vertices.")
+            warn(lines, f"Review: temp_{fc_name}_OVER_MAX_VERTICES")
+            lines.append(f"Review dataset path: {os.path.join(fds_path, f'temp_{fc_name}_OVER_MAX_VERTICES')}")
 
-            arcpy.AddWarning("Possible solutions:")
-            arcpy.AddWarning("- Use Simplify Polygon (<1m tolerance)")
-            arcpy.AddWarning("- Split multipart polygons")
-            arcpy.AddWarning("- Contact your Data Resource Manager")
+            warn(lines, "Possible solutions:")
+            warn(lines, "- Use Simplify Polygon (<1m tolerance)")
+            warn(lines, "- Split multipart polygons")
+            warn(lines, "- Contact your Data Resource Manager")
 
         else:
-            arcpy.AddMessage('All features are under the vertex limit ✔')
+            msg(lines, 'All features are under the vertex limit ✔')
 
         # Cleanup
         arcpy.management.DeleteField(fc_lyr, "VxCount")
         arcpy.management.Delete(fc_lyr)
 
-        arcpy.AddMessage("----- Vertex count check complete -----")
+        msg(lines, "----- Vertex count check complete -----")
+        write_report("MAX VERTEX COUNT PER FEATURE", lines)
 
     # ---------------- CALL FUNCTIONS ----------------
     arcpy.SetProgressor("step", "Repairing geometry...", 0, 4, 1)
@@ -270,3 +387,7 @@ def run(in_fc):
     arcpy.SetProgressorLabel("Step 4 of 4: Checking for duplicate vertices...")
     arcpy.SetProgressorPosition()
     check_for_multiple_identical_vertices(in_fc)
+
+    if report_state["path"]:
+        arcpy.AddMessage("")
+        arcpy.AddMessage("Geometry report written to: " + report_state["path"])
