@@ -27,7 +27,7 @@ class Toolbox:
         self.alias = "toolbox"
 
         # List of tool classes associated with this toolbox
-        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords, CompareFGDBProperties, CheckInDataset]  
+        self.tools = [FindDuplicates, UpdateSeqNumbers, UpdateSeqNumOgmaLegalandNon, GeometryCheckTool, AttributeQa, CompareNumRecords, CompareFGDBProperties, CheckInDataset, CheckOutDataset]  
        
         # Insert the name of each tool in your toolbox if you have more than one. 
         # i.e. self.tools = [FullSiteOverviewMaps, ExportSiteAndImageryLayout, Amendment]
@@ -791,6 +791,153 @@ class CheckInDataset(object):
 
         check_in_dataset.run(update_dir, in_dataset, master_dataset,
                              email_folder, dest_current_dir)
+
+    def postExecute(self, parameters):
+        return
+
+
+class CheckOutDataset(object):
+    def __init__(self):
+        """Automates the OGMA dataset check-out workflow: creates the project
+        request folder, copies + fills the checklist spreadsheet, records the
+        request, archives + zips the CurrentUpdate FGDB, clears CurrentUpdate,
+        cleans the Update WorkArea, and seeds both with a dated copy of the
+        MASTER FGDB. Testing Mode redirects every directory to the sandbox."""
+        self.label = "Check Out Dataset"
+        self.description = (
+            "Simplifies the manual steps for checking out an OGMA dataset. "
+            "Creates the per-request project folder, copies and fills the "
+            "DataUpdateChecklist spreadsheet, writes a request record, archives "
+            "and zips the current FGDB, clears the CurrentUpdate folder, cleans "
+            "the Update WorkArea, and copies a dated MASTER FGDB into both "
+            "CurrentUpdate and the Update WorkArea. Enable Testing Mode to run "
+            "entirely against the sandbox directories."
+        )
+
+    def getParameterInfo(self):
+        # Datatypes and value lists mirror script_modules/check_out_dataset.py.
+        # Keep the two in sync if the picklists change.
+        testing_mode = arcpy.Parameter(
+            displayName="Testing Mode (redirect all directories to the sandbox)",
+            name="testing_mode",
+            datatype="GPBoolean",
+            parameterType="Optional",
+            direction="Input")
+        testing_mode.value = False
+
+        request_type = arcpy.Parameter(
+            displayName="Request Type",
+            name="request_type",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+        request_type.filter.type = "ValueList"
+        request_type.filter.list = ["OGMA", "LU", "SLRP"]
+        request_type.value = "OGMA"
+
+        update_region = arcpy.Parameter(
+            displayName="Update Region",
+            name="update_region",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+        update_region.filter.type = "ValueList"
+        update_region.filter.list = [
+            "Cariboo", "Thompson_Okanagan", "Omineca", "South_Coast",
+            "Skeena", "KBR", "West_Coast",
+        ]
+
+        gis_update_person = arcpy.Parameter(
+            displayName="GIS Update Person",
+            name="gis_update_person",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        data_resource_manager = arcpy.Parameter(
+            displayName="Data Resource Manager",
+            name="data_resource_manager",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        initiator_of_change = arcpy.Parameter(
+            displayName="Initiator of Change",
+            name="initiator_of_change",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        date_checkout_requested = arcpy.Parameter(
+            displayName="Date Checkout Requested",
+            name="date_checkout_requested",
+            datatype="GPDate",
+            parameterType="Required",
+            direction="Input")
+
+        gss_portal_request_number = arcpy.Parameter(
+            displayName="GSS Portal Request Number",
+            name="gss_portal_request_number",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+
+        dataset_being_updated = arcpy.Parameter(
+            displayName="Dataset Being Updated",
+            name="dataset_being_updated",
+            datatype="GPString",
+            parameterType="Required",
+            direction="Input")
+        dataset_being_updated.filter.type = "ValueList"
+        dataset_being_updated.filter.list = [
+            "Landscape Units", "OGMA - Legal", "OGMA - Non Legal",
+            "SLRP - Boundaries", "SLRP - Legal Polygons", "SLRP - Legal Lines",
+            "SLRP - Legal Points", "SLRP - Non Legal Polygons",
+            "SLRP - Non Legal Lines", "SLRP - Non Legal Points",
+        ]
+
+        return [testing_mode, request_type, update_region, gis_update_person,
+                data_resource_manager, initiator_of_change,
+                date_checkout_requested, gss_portal_request_number,
+                dataset_being_updated]
+
+    def isLicensed(self):
+        return True
+
+    def updateParameters(self, parameters):
+        return
+
+    def updateMessages(self, parameters):
+        return
+
+    def execute(self, parameters, messages):
+        testing_mode              = parameters[0].value
+        request_type              = parameters[1].valueAsText
+        update_region             = parameters[2].valueAsText
+        gis_update_person         = parameters[3].valueAsText
+        data_resource_manager     = parameters[4].valueAsText
+        initiator_of_change       = parameters[5].valueAsText
+        date_checkout_requested   = parameters[6].value  # datetime.datetime
+        gss_portal_request_number = parameters[7].valueAsText
+        dataset_being_updated     = parameters[8].valueAsText
+
+        toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+        modules_dir = os.path.join(toolbox_dir, 'script_modules')
+        if modules_dir not in sys.path:
+            sys.path.insert(0, modules_dir)
+
+        # Reload config_loader first so any mid-session .env edits (new keys,
+        # changed paths) are picked up without restarting ArcGIS Pro.
+        import config_loader
+        importlib.reload(config_loader)
+
+        import check_out_dataset
+        importlib.reload(check_out_dataset)
+
+        check_out_dataset.run(
+            testing_mode, request_type, update_region, gis_update_person,
+            data_resource_manager, initiator_of_change, date_checkout_requested,
+            gss_portal_request_number, dataset_being_updated)
 
     def postExecute(self, parameters):
         return

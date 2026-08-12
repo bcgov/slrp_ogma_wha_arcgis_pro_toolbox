@@ -32,6 +32,10 @@ rasters/
 outputs/
 *.xlsx
 
+# ---------- Per-request records (contain real network paths — never commit) ----------
+*.json
+request_details.json
+
 # ---------- Logs ----------
 logs/
 *.log
