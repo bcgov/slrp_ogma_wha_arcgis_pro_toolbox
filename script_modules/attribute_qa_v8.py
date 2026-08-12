@@ -108,14 +108,14 @@ except:
 
 ####################################################################
 ##TESTING BLOCK
-# inDataset = r"\\spatialfiles.bcgov\work\srm\wml\workarea\camahood\Data_Management\slrp_issues\strategic_land_resource_plan_bc_Update_20211208_returned_20211214.gdb\slrp_planning_feature_legal_PRG_poly"
-# masterDataset = r"\\spatialfiles.bcgov\work\srm\wml\workarea\camahood\Data_Management\slrp_issues\strategic_land_resource_plan_bc.gdb\slrp_planning_feature_legal_PRG_poly"
-
-# inDataset = r"\\spatialfiles.bcgov\work\srm\gss\initiatives\slrp_ogma_gar\test_source_data\N_UpdateManagment\OldGrowthManagmentAreas\CurrentUpdate\old_growth_management_area_bc_returned_20260409.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly"
-# masterDataset = r"\\spatialfiles.bcgov\work\srm\gss\initiatives\slrp_ogma_gar\test_source_data\N_UpdateManagment\OldGrowthManagmentAreas\CurrentUpdate\old_growth_management_area_bc_ToReplicate.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly_Main"
-
+# To run this script standalone for testing, set inDataset and
+# masterDataset to local test paths. Do NOT commit real network paths.
+# See Documentation/TEST_DATA_CREATION_TUTORIAL.md for test data setup.
+#
+# inDataset = r"<path to test update feature class>"
+# masterDataset = r"<path to test master feature class>"
 # drmRunningTool = True
-# ####################################################################
+####################################################################
 
 # ORIGINAL: record_section_result(section_id, section_name, checks) — stored only
 #   machine-oriented "rule" strings per check, no section-level explanation.

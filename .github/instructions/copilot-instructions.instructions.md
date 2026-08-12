@@ -73,6 +73,49 @@ Copilot Chat loads it automatically on every session. No extra steps needed.
 - `CalculateField` shape expressions: use `!shape.pointCount!` syntax (not `!shape!.pointCount`)
 - Writing temp FCs to a Feature Dataset path: verify spatial reference matches before writing
 
+### Environment-Specific Paths — config_loader / .env Pattern
+All environment-specific file paths (network drives, UNC paths, .sde connections, root folders)
+MUST be stored in `.env` at the repository root and read via `config_loader.py` in `script_modules/`.
+NEVER hardcode a real path in any committed Python file.
+
+#### How to use in a script
+```python
+import config_loader
+my_path = config_loader.MY_KEY   # reads MY_KEY=value from .env
+```
+
+#### How to add a new path
+1. Open `.env` at the repo root and add a line: `MY_NEW_PATH=\\server\share\folder`
+2. In the script: `my_path = config_loader.MY_NEW_PATH`
+3. No changes to `config_loader.py` are needed unless a new script module is added.
+
+#### Rules
+- `.env` is listed in `.gitignore` — it is NEVER committed. Real paths live only in `.env`.
+- `config_loader.py` is committed — it contains zero real paths, only the loader logic.
+- In `.pyt` `getParameterInfo()` methods, pre-fill default values from `config_loader` inside a
+  `try/except Exception: pass` block so the tool dialog still opens if `.env` is absent.
+- In `.pyt` `execute()` and standalone `script_modules/` scripts, call `config_loader.KEY`
+  directly (no try/except — a missing `.env` should be a loud, visible error at runtime).
+- `.env` backslash rules: write UNC paths exactly as in Windows Explorer (`\\server\share\folder`).
+  Do NOT double-escape backslashes — `.env` is not Python or JSON.
+- `config_loader.py` resolves `.env` relative to the repo root via `__file__` (parent of
+  `script_modules/`). No absolute paths are needed in the loader.
+
+#### sys.path pattern for .pyt getParameterInfo
+Because `getParameterInfo()` runs before `execute()`, `script_modules/` may not yet be on
+`sys.path`. Always insert it inside the same `try` block:
+```python
+try:
+    toolbox_dir = os.path.dirname(os.path.abspath(__file__))
+    modules_dir = os.path.join(toolbox_dir, 'script_modules')
+    if modules_dir not in sys.path:
+        sys.path.insert(0, modules_dir)
+    import config_loader
+    my_param.value = config_loader.MY_KEY
+except Exception:
+    pass  # Leave blank if .env is not yet set up
+```
+
 ### Change Discipline — Read Before Every Edit
 
 #### Surgical Changes Only

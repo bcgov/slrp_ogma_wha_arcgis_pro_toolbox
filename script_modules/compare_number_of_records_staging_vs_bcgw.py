@@ -72,6 +72,20 @@ import os
 import arcpy
 import uuid
 
+# ORIGINAL: staging_path and bcgw_path were passed by the caller (toolbox .pyt)
+#           which had the staging path hardcoded as its default parameter value,
+#           and all ~100 dataset sub-paths were constructed inline in run().
+# CHANGE: Dataset sub-paths are now read from .env via config_loader so that
+#         GDB names/structures can be updated in one place without touching
+#         source code. staging_base and bcgw_path are still accepted as run()
+#         parameters so the toolbox dialog values take precedence (the toolbox
+#         pre-fills them from .env too, but the user can override them).
+# RISK: If .env is absent or a key is missing, config_loader raises
+#       before any arcpy work begins.
+# DOWNSTREAM: Only the dataset path construction block inside run() is affected;
+#             all comparison logic below is unchanged.
+import config_loader
+
 
 def _get_count(dataset):
     """Wrapper around arcpy.GetCount_management that intercepts ERROR 000229 (Cannot open)
@@ -137,92 +151,96 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
         return
 
     ##############################################################
-    # Datasets to compare
+    # Datasets to compare — sub-paths loaded from .env
     ##############################################################
 
-    ogmaLegal_staging = staging_path + r"\old_growth_management_area_bc.gdb\old_growth_management_area_albers\old_growth_management_area_legal_bc_poly"
-    ogmaLegal_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_SP"
-    ogmaLegal_BCGW_current_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_CURRENT_SVW"
-    ogmaLegal_BCGW_all_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_ALL_SVW"
+    def _sp(key):
+        """Build a full staging dataset path from a .env variable name."""
+        return os.path.join(staging_path, getattr(config_loader, key))
 
-    ogmaNonLegal_staging = staging_path + r"\old_growth_management_area_bc.gdb\old_growth_management_area_albers\old_growth_management_area_non_legal_bc_poly"
-    ogmaNonLegal_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_SP"
+    ogmaLegal_staging         = _sp("DATASET_OGMA_LEGAL")
+    ogmaLegal_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_SP"
+    ogmaLegal_BCGW_current_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_CURRENT_SVW"
+    ogmaLegal_BCGW_all_SVW    = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_LEGAL_ALL_SVW"
+
+    ogmaNonLegal_staging      = _sp("DATASET_OGMA_NON_LEGAL")
+    ogmaNonLegal_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_SP"
     ogmaNonLegal_BCGW_current_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_CURRENT_SVW"
     ogmaNonLegal_BCGW_all_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_OGMA_NON_LEGAL_ALL_SVW"
 
-    lu_staging = staging_path + r"\landscape_unit_bc.gdb\landscape_unit_albers\landscape_unit_poly"
-    lu_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SP"
-    lu_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SVW"
+    lu_staging                = _sp("DATASET_LU")
+    lu_BCGW                   = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SP"
+    lu_BCGW_SVW               = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_LANDSCAPE_UNIT_SVW"
 
-    slrpBoundary_staging = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_boundary_bc_poly"
-    slrpBoundary_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SP"
-    slrpBoundary_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SVW"
+    slrpBoundary_staging      = _sp("DATASET_SLRP_BOUNDARY")
+    slrpBoundary_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SP"
+    slrpBoundary_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_STRGC_LAND_RSRCE_PLAN_SVW"
 
-    legalPoly_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_CAR_poly"
-    legalPoly_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_FSJ_poly"
-    legalPoly_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KAM_poly"
-    legalPoly_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KOR_poly"
-    legalPoly_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_NAN_poly"
-    legalPoly_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_PRG_poly"
-    legalPoly_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SKE_poly"
-    legalPoly_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SUR_poly"
-    legalPoly_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY"
-    legalPoly_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY_SVW"
+    legalPoly_staging_CAR     = _sp("DATASET_SLRP_LEGAL_POLY_CAR")
+    legalPoly_staging_FSJ     = _sp("DATASET_SLRP_LEGAL_POLY_FSJ")
+    legalPoly_staging_KAM     = _sp("DATASET_SLRP_LEGAL_POLY_KAM")
+    legalPoly_staging_KOR     = _sp("DATASET_SLRP_LEGAL_POLY_KOR")
+    legalPoly_staging_NAN     = _sp("DATASET_SLRP_LEGAL_POLY_NAN")
+    legalPoly_staging_PRG     = _sp("DATASET_SLRP_LEGAL_POLY_PRG")
+    legalPoly_staging_SKE     = _sp("DATASET_SLRP_LEGAL_POLY_SKE")
+    legalPoly_staging_SUR     = _sp("DATASET_SLRP_LEGAL_POLY_SUR")
+    legalPoly_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY"
+    legalPoly_BCGW_SVW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POLY_SVW"
 
-    legalLine_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_CAR_line"
-    legalLine_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_FSJ_line"
-    legalLine_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KAM_line"
-    legalLine_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KOR_line"
-    legalLine_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_NAN_line"
-    legalLine_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_PRG_line"
-    legalLine_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SKE_line"
-    legalLine_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SUR_line"
-    legalLine_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE"
-    legalLine_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE_SVW"
+    legalLine_staging_CAR     = _sp("DATASET_SLRP_LEGAL_LINE_CAR")
+    legalLine_staging_FSJ     = _sp("DATASET_SLRP_LEGAL_LINE_FSJ")
+    legalLine_staging_KAM     = _sp("DATASET_SLRP_LEGAL_LINE_KAM")
+    legalLine_staging_KOR     = _sp("DATASET_SLRP_LEGAL_LINE_KOR")
+    legalLine_staging_NAN     = _sp("DATASET_SLRP_LEGAL_LINE_NAN")
+    legalLine_staging_PRG     = _sp("DATASET_SLRP_LEGAL_LINE_PRG")
+    legalLine_staging_SKE     = _sp("DATASET_SLRP_LEGAL_LINE_SKE")
+    legalLine_staging_SUR     = _sp("DATASET_SLRP_LEGAL_LINE_SUR")
+    legalLine_BCGW            = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE"
+    legalLine_BCGW_SVW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_LINE_SVW"
 
-    legalPoint_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_CAR_point"
-    legalPoint_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_FSJ_point"
-    legalPoint_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KAM_point"
-    legalPoint_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_KOR_point"
-    legalPoint_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_NAN_point"
-    legalPoint_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_PRG_point"
-    legalPoint_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SKE_point"
-    legalPoint_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_legal_SUR_point"
-    legalPoint_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT"
-    legalPoint_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT_SVW"
+    legalPoint_staging_CAR    = _sp("DATASET_SLRP_LEGAL_POINT_CAR")
+    legalPoint_staging_FSJ    = _sp("DATASET_SLRP_LEGAL_POINT_FSJ")
+    legalPoint_staging_KAM    = _sp("DATASET_SLRP_LEGAL_POINT_KAM")
+    legalPoint_staging_KOR    = _sp("DATASET_SLRP_LEGAL_POINT_KOR")
+    legalPoint_staging_NAN    = _sp("DATASET_SLRP_LEGAL_POINT_NAN")
+    legalPoint_staging_PRG    = _sp("DATASET_SLRP_LEGAL_POINT_PRG")
+    legalPoint_staging_SKE    = _sp("DATASET_SLRP_LEGAL_POINT_SKE")
+    legalPoint_staging_SUR    = _sp("DATASET_SLRP_LEGAL_POINT_SUR")
+    legalPoint_BCGW           = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT"
+    legalPoint_BCGW_SVW       = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_LEGAL_POINT_SVW"
 
-    nonlegalPoly_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_CAR_poly"
-    nonlegalPoly_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_FSJ_poly"
-    nonlegalPoly_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KAM_poly"
-    nonlegalPoly_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KOR_poly"
-    nonlegalPoly_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_NAN_poly"
-    nonlegalPoly_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_PRG_poly"
-    nonlegalPoly_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SKE_poly"
-    nonlegalPoly_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SUR_poly"
-    nonlegalPoly_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY"
-    nonlegalPoly_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY_SVW"
+    nonlegalPoly_staging_CAR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_CAR")
+    nonlegalPoly_staging_FSJ  = _sp("DATASET_SLRP_NON_LEGAL_POLY_FSJ")
+    nonlegalPoly_staging_KAM  = _sp("DATASET_SLRP_NON_LEGAL_POLY_KAM")
+    nonlegalPoly_staging_KOR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_KOR")
+    nonlegalPoly_staging_NAN  = _sp("DATASET_SLRP_NON_LEGAL_POLY_NAN")
+    nonlegalPoly_staging_PRG  = _sp("DATASET_SLRP_NON_LEGAL_POLY_PRG")
+    nonlegalPoly_staging_SKE  = _sp("DATASET_SLRP_NON_LEGAL_POLY_SKE")
+    nonlegalPoly_staging_SUR  = _sp("DATASET_SLRP_NON_LEGAL_POLY_SUR")
+    nonlegalPoly_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY"
+    nonlegalPoly_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POLY_SVW"
 
-    nonlegalLine_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_CAR_line"
-    nonlegalLine_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_FSJ_line"
-    nonlegalLine_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KAM_line"
-    nonlegalLine_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KOR_line"
-    nonlegalLine_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_NAN_line"
-    nonlegalLine_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_PRG_line"
-    nonlegalLine_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SKE_line"
-    nonlegalLine_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SUR_line"
-    nonlegalLine_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE"
-    nonlegalLine_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE_SVW"
+    nonlegalLine_staging_CAR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_CAR")
+    nonlegalLine_staging_FSJ  = _sp("DATASET_SLRP_NON_LEGAL_LINE_FSJ")
+    nonlegalLine_staging_KAM  = _sp("DATASET_SLRP_NON_LEGAL_LINE_KAM")
+    nonlegalLine_staging_KOR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_KOR")
+    nonlegalLine_staging_NAN  = _sp("DATASET_SLRP_NON_LEGAL_LINE_NAN")
+    nonlegalLine_staging_PRG  = _sp("DATASET_SLRP_NON_LEGAL_LINE_PRG")
+    nonlegalLine_staging_SKE  = _sp("DATASET_SLRP_NON_LEGAL_LINE_SKE")
+    nonlegalLine_staging_SUR  = _sp("DATASET_SLRP_NON_LEGAL_LINE_SUR")
+    nonlegalLine_BCGW         = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE"
+    nonlegalLine_BCGW_SVW     = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_LINE_SVW"
 
-    nonlegalPoint_staging_CAR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_CAR_point"
-    nonlegalPoint_staging_FSJ = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_FSJ_point"
-    nonlegalPoint_staging_KAM = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KAM_point"
-    nonlegalPoint_staging_KOR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_KOR_point"
-    nonlegalPoint_staging_NAN = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_NAN_point"
-    nonlegalPoint_staging_PRG = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_PRG_point"
-    nonlegalPoint_staging_SKE = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SKE_point"
-    nonlegalPoint_staging_SUR = staging_path + r"\strategic_land_resource_plan_bc.gdb\strategic_land_resource_plan_albers\slrp_planning_feature_non_legal_SUR_point"
-    nonlegalPoint_BCGW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT"
-    nonlegalPoint_BCGW_SVW = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT_SVW"
+    nonlegalPoint_staging_CAR = _sp("DATASET_SLRP_NON_LEGAL_POINT_CAR")
+    nonlegalPoint_staging_FSJ = _sp("DATASET_SLRP_NON_LEGAL_POINT_FSJ")
+    nonlegalPoint_staging_KAM = _sp("DATASET_SLRP_NON_LEGAL_POINT_KAM")
+    nonlegalPoint_staging_KOR = _sp("DATASET_SLRP_NON_LEGAL_POINT_KOR")
+    nonlegalPoint_staging_NAN = _sp("DATASET_SLRP_NON_LEGAL_POINT_NAN")
+    nonlegalPoint_staging_PRG = _sp("DATASET_SLRP_NON_LEGAL_POINT_PRG")
+    nonlegalPoint_staging_SKE = _sp("DATASET_SLRP_NON_LEGAL_POINT_SKE")
+    nonlegalPoint_staging_SUR = _sp("DATASET_SLRP_NON_LEGAL_POINT_SUR")
+    nonlegalPoint_BCGW        = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT"
+    nonlegalPoint_BCGW_SVW    = bcgw_path + "\\WHSE_LAND_USE_PLANNING.RMP_PLAN_NON_LEGAL_POINT_SVW"
 
     ################################################################
     # Pre-flight: verify access to RMP_OGMA_LEGAL_SP
@@ -991,7 +1009,10 @@ def run(ogma_compare, lu_compare, slrp_compare, staging_path, bcgw_path):
 
 
 if __name__ == "__main__":
-    # Default paths for standalone testing - update as needed before running directly
-    _staging_path = r"\\data.bcgov\data_staging_bcgw\land_use_plans_secure\slrp"
-    _bcgw_path = r"Database Connections\BCGW.sde"
+    # ORIGINAL: _staging_path and _bcgw_path were hardcoded UNC literals.
+    # CHANGE: Loaded from .env via config_loader.
+    # RISK: If .env is absent, config_loader raises with a clear message.
+    # DOWNSTREAM: Only the standalone test invocation is affected.
+    _staging_path = config_loader.STAGING_BASE
+    _bcgw_path    = config_loader.BCGW_SDE
     run(True, True, True, _staging_path, _bcgw_path)

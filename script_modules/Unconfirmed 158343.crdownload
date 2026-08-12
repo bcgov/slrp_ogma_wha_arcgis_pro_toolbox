@@ -6,29 +6,16 @@
 #
 # Workflow steps (in order):
 #   1. List files present in the UpdateWorkArea directory (checklist)
-#   2. Derive dataset type from the Returned GDB name
-#      (OGMA / LU / SLRP / WHA) — abort if the name matches no known type
-#   3. Run Attribute QA/QC on the chosen feature class
-#      (IF ERROR — copy steps do NOT run if QA raises)
-#   4. Display topology report rows
-#      (informational only — user determines pass/fail)
-#   5. Rename (not delete) any existing GDBs in the destination CurrentUpdate folder to
-#      "<name>_to_delete.gdb" IN PLACE, then copy the Returned FGDB from Update Workarea
-#      alongside them. Nothing is deleted or overwritten by this tool.
-#      Destination CurrentUpdate folder is supplied explicitly by the caller
-#      (GUI parameter or standalone arg) — it is never derived from a
-#      hardcoded/production path.
-#   6. Copy QA reports (.txt / .json / .html) and topology report to the
-#      Update_Emails destination folder. The topology report is whatever file
-#      was matched by the wildcard in Step 1 (any .csv or .txt whose name
-#      contains 'top').
+#   2. Run Attribute QA/QC on the chosen feature class
+#   3. Display topology report rows (user determines pass/fail)
+#   4. Copy the Returned FGDB to UpdateManagement\<Type>\CurrentUpdate
+#   5. Copy QA reports and topology report to Update_Emails destination folder
 #
 # IMPORTANT — read-only on source data:
 #   This script MUST NOT modify, lock, or write to the source FGDB in any way.
 #   It copies data out; it never edits data in.
 #
 # Created: 2026-06-04
-# Updated: 2026-07-23
 # ===========================================================================
 
 import arcpy
@@ -37,16 +24,6 @@ import importlib
 import os
 import shutil
 import sys
-
-# Ensure script_modules/ is on sys.path so config_loader (and other peer
-# modules) can be found whether this file is run standalone or imported from
-# the .pyt toolbox.  __file__ lives in script_modules/, so its dirname IS the
-# correct directory — no subdirectory navigation needed.
-_modules_dir = os.path.dirname(os.path.abspath(__file__))
-if _modules_dir not in sys.path:
-    sys.path.insert(0, _modules_dir)
-
-import config_loader
 
 
 # ---------------------------------------------------------------------------
@@ -71,14 +48,7 @@ TYPE_TO_FOLDER = {
 }
 
 # Root of UpdateManagement on spatialfiles3.
-# Loaded from .env via config_loader — do NOT hardcode this path here.
-# NOTE: This constant is retained as an informational reference only. It is
-# NO LONGER used to derive the copy destination in copy_returned_fgdb().
-# The destination CurrentUpdate folder is now supplied by the caller (the
-# CheckInDataset toolbox parameter, or the standalone __main__ block) so the
-# tool cannot silently write to production when the operator has selected
-# sandbox inputs. 
-UPDATE_MGMT_BASE = config_loader.UPDATE_MGMT_BASE
+UPDATE_MGMT_BASE = r"\\spatialfiles3.bcgov\slrp\UpdateManagement"
 
 
 # ---------------------------------------------------------------------------
@@ -94,16 +64,13 @@ def list_update_directory_files(update_dir):
     - Returned FGDB  : the single .gdb folder in the update directory
                        (naming convention varies in practice; the user has
                        confirmed there is only ever one .gdb per update dir)
-    - QA/QC report(s): one or more *.txt files (must NOT contain 'top' in
-                       the filename, to avoid collision with topology reports)
-    - Topology report: any .csv or .txt file whose name contains 'top'
-                       (case-insensitive), e.g. topology_report.csv,
-                       TopologyReport.csv, topo_report.txt, Top Report.csv
+    - QA/QC report(s): one or more *.txt files
+    - Topology report: topology_report.csv
 
     Returns a dict with keys:
         'returned_gdb'    : full path to the Returned GDB folder, or None
         'qa_reports'      : list of full .txt paths (may be empty)
-        'topology_report' : full path to the matched topology file, or None
+        'topology_report' : full path to topology_report.csv, or None
     """
     arcpy.AddMessage("")
     arcpy.AddMessage("=" * 60)
@@ -123,7 +90,8 @@ def list_update_directory_files(update_dir):
     entries = os.listdir(update_dir)
 
     # --- Returned GDB ---
-    # The update directory contains exactly one .gdb. Doesnt enforce a strict naming pattern — actual files in
+    # Expectation (set by the user): the update directory contains exactly
+    # one .gdb. We don't enforce a strict naming pattern — actual files in
     # the wild use varying conventions (e.g. _Update_YYYYMMDD_Returned_YYYYMMDD,
     # _update_YYYYMMDD, _returned_YYYYMMDD). Just pick the single .gdb.
     gdbs_found = [
@@ -142,47 +110,22 @@ def list_update_directory_files(update_dir):
             + ", ".join(os.path.basename(p) for p in gdbs_found)
         )
 
-    # --- Topology report ---
-    # Match any .csv or .txt whose name contains 'top' (case-insensitive).
-    # Detected before QA reports so topology .txt files can be excluded from
-    # the QA report scan below.
-    topo_candidates = [
-        os.path.join(update_dir, e)
-        for e in entries
-        if e.lower().endswith((".csv", ".txt"))
-        and "top" in e.lower()
-        and os.path.isfile(os.path.join(update_dir, e))
-    ]
-    if len(topo_candidates) == 1:
-        result["topology_report"] = topo_candidates[0]
-        arcpy.AddMessage("  [PRESENT] Topology report: " + os.path.basename(topo_candidates[0]))
-    elif len(topo_candidates) > 1:
-        result["topology_report"] = topo_candidates[0]
-        arcpy.AddWarning(
-            "  [AMBIGUOUS] Multiple topology report candidates found: "
-            + ", ".join(os.path.basename(p) for p in topo_candidates)
-            + " — using first match: " + os.path.basename(topo_candidates[0])
-        )
-    else:
-        arcpy.AddWarning(
-            "  [MISSING] Topology report  "
-            "(no .csv or .txt whose name contains 'top' found in update directory)"
-        )
-
     # --- QA/QC reports (.txt) ---
-    # Exclude any .txt already matched as the topology report.
-    topo_paths_set = set(topo_candidates)
     for entry in entries:
         full_path = os.path.join(update_dir, entry)
-        if (
-            entry.lower().endswith(".txt")
-            and os.path.isfile(full_path)
-            and full_path not in topo_paths_set
-        ):
+        if entry.lower().endswith(".txt") and os.path.isfile(full_path):
             result["qa_reports"].append(full_path)
             arcpy.AddMessage("  [PRESENT] QA/QC report   : " + entry)
     if not result["qa_reports"]:
         arcpy.AddWarning("  [MISSING] QA/QC report   (expected: *_attribute_check_*.txt)")
+
+    # --- Topology report ---
+    topo_path = os.path.join(update_dir, "topology_report.csv")
+    if os.path.isfile(topo_path):
+        result["topology_report"] = topo_path
+        arcpy.AddMessage("  [PRESENT] Topology report: topology_report.csv")
+    else:
+        arcpy.AddWarning("  [MISSING] Topology report: topology_report.csv")
 
     arcpy.AddMessage("=" * 60)
     return result
@@ -238,22 +181,13 @@ def run_attribute_qa(in_dataset_path, master_dataset_path):
 # Step 4: Display topology report
 # ---------------------------------------------------------------------------
 
-def read_topology_report(topo_path):
-    """Print every row of the topology report file to the tool messages panel.
-    The user is responsible for determining pass/fail.
+def read_topology_report(update_dir):
+    """Read topology_report.csv from *update_dir* and print every row as a
+    message. The user is responsible for determining pass/fail.
 
-    Parameters
-    ----------
-    topo_path : str or None
-        Full path to the topology report file as resolved by
-        list_update_directory_files().  Pass None (or a missing path) to
-        skip silently with a warning.
-
-    Encoding
-    --------
-    ArcGIS Pro topology exports are UTF-16 LE.  Other tools may produce
-    UTF-8 or UTF-8-with-BOM.  The function tries utf-16 first, then falls
-    back to utf-8-sig (handles BOM), then plain utf-8.
+    The file is encoded in UTF-16 LE (exported by ArcGIS Pro topology viewer).
+    The 'utf-16' codec auto-detects the BOM, so no explicit byte-order mark
+    handling is required.
 
     Returns the number of data rows found (0 if file absent or empty).
     """
@@ -262,31 +196,20 @@ def read_topology_report(topo_path):
     arcpy.AddMessage("TOPOLOGY REPORT")
     arcpy.AddMessage("=" * 60)
 
-    if not topo_path or not os.path.isfile(topo_path):
-        arcpy.AddWarning("Topology report not found — skipping.")
+    topo_path = os.path.join(update_dir, "topology_report.csv")
+    if not os.path.isfile(topo_path):
+        arcpy.AddWarning("topology_report.csv not found in " + update_dir + " — skipping.")
         return 0
 
-    arcpy.AddMessage("File: " + topo_path)
     row_count = 0
-    for encoding in ("utf-16", "utf-8-sig", "utf-8"):
-        try:
-            with open(topo_path, encoding=encoding) as f:
-                reader = csv.reader(f)
-                for row in reader:
-                    arcpy.AddMessage("  " + ", ".join(row))
-                    row_count += 1
-            break  # succeeded — stop trying encodings
-        except (UnicodeDecodeError, UnicodeError):
-            row_count = 0
-            continue
-        except Exception as exc:
-            arcpy.AddWarning("Could not read " + os.path.basename(topo_path) + ": " + str(exc))
-            return 0
-    else:
-        arcpy.AddWarning(
-            "Could not decode " + os.path.basename(topo_path)
-            + " as utf-16, utf-8-sig, or utf-8 — skipping."
-        )
+    try:
+        with open(topo_path, encoding="utf-16") as f:
+            reader = csv.reader(f)
+            for row in reader:
+                arcpy.AddMessage("  " + ", ".join(row))
+                row_count += 1
+    except Exception as exc:
+        arcpy.AddWarning("Could not read topology_report.csv: " + str(exc))
         return 0
 
     arcpy.AddMessage("Total rows in topology report: " + str(row_count))
@@ -311,9 +234,8 @@ def _derive_type_token(gdb_path):
     return None
 
 
-def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
-    """Copy the entire Returned FGDB into *dest_current_dir* (a CurrentUpdate
-    folder chosen by the caller).
+def copy_returned_fgdb(returned_gdb_path, type_token):
+    """Copy the entire Returned FGDB to UpdateManagement\\<Type>\\CurrentUpdate.
 
     Uses arcpy.management.Copy() which creates a fresh copy and leaves the
     source completely unmodified (no schema locks acquired on the source GDB).
@@ -321,15 +243,7 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
     Parameters
     ----------
     returned_gdb_path : str  Full path to the Returned FGDB folder.
-    dest_current_dir  : str  Full path to the destination CurrentUpdate folder.
-                              Supplied by the caller (toolbox parameter or
-                              standalone __main__) so the destination is
-                              always driven by an explicit user choice, never
-                              by an implicit .env constant.
-    type_token        : str  One of OGMA / LU / SLRP / WHA. Used ONLY for
-                              logging so the operator can confirm the tool
-                              correctly recognised the dataset type; the
-                              destination path no longer depends on it.
+    type_token        : str  One of OGMA / LU / SLRP / WHA.
 
     Returns
     -------
@@ -337,6 +251,7 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
 
     Raises
     ------
+    KeyError   If type_token is not in TYPE_TO_FOLDER.
     Exception  Re-raises arcpy errors so the caller can report them.
     """
     arcpy.AddMessage("")
@@ -344,14 +259,13 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
     arcpy.AddMessage("COPYING RETURNED FGDB")
     arcpy.AddMessage("=" * 60)
 
-    dest_dir = dest_current_dir
+    type_folder = TYPE_TO_FOLDER[type_token]
+    dest_dir = os.path.join(UPDATE_MGMT_BASE, type_folder, "CurrentUpdate")
     gdb_basename = os.path.basename(returned_gdb_path)
     dest_gdb_path = os.path.join(dest_dir, gdb_basename)
 
-    arcpy.AddMessage("Detected dataset type : " + type_token)
-    arcpy.AddMessage("Source                : " + returned_gdb_path)
-    arcpy.AddMessage("Destination folder    : " + dest_dir)
-    arcpy.AddMessage("Destination GDB       : " + dest_gdb_path)
+    arcpy.AddMessage("Source : " + returned_gdb_path)
+    arcpy.AddMessage("Dest   : " + dest_gdb_path)
 
     if not os.path.isdir(dest_dir):
         arcpy.AddError("Destination directory does not exist: " + dest_dir)
@@ -379,7 +293,6 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
     #           and the "_to_delete" incumbent. Any later step that assumes exactly one
     #           .gdb in CurrentUpdate must skip "*_to_delete.gdb". CheckInDataset.md
     #           Step 5 still documents the old "overwritten" behavior — separate doc fix.
-    flagged_gdbs = []  # list of (original_name, flagged_name) tuples for the summary block
     for entry in os.listdir(dest_dir):
         entry_path = os.path.join(dest_dir, entry)
         if (entry.lower().endswith(".gdb")
@@ -416,36 +329,12 @@ def copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token):
                     "  To fix: remove any layers from this GDB from the map, close "
                     "any other application that has it open, then re-run this tool. "
                     "If the lock persists, closing and reopening ArcGIS Pro will "
-                    "clear it.\n"
-                    "  NOTE: This is a bug in the process of being fixed. Try to "
-                    "close and reopen ArcGIS Pro and run the tool again. Please "
-                    "note the behavior and notify the owner of the tool to assist "
-                    "in troubleshooting."
+                    "clear it."
                 )
                 raise
-            flagged_gdbs.append((entry, flagged_name))
             arcpy.AddMessage(
-                "  Renamed in place:  " + entry + "  ->  " + flagged_name
+                "Flagged existing GDB for later deletion: " + entry + "  ->  " + flagged_name
             )
-
-    if flagged_gdbs:
-        arcpy.AddMessage("")
-        arcpy.AddMessage("-" * 60)
-        arcpy.AddMessage("EXISTING GDB(s) FLAGGED FOR LATER DELETION")
-        arcpy.AddMessage("-" * 60)
-        arcpy.AddMessage(
-            "The previous CurrentUpdate GDB(s) were renamed in place (NOT moved). "
-            "They are still located in the destination CurrentUpdate folder shown "
-            "below, alongside the newly checked-in GDB. The DRM should review and "
-            "delete them manually once the new check-in is confirmed good."
-        )
-        arcpy.AddMessage("")
-        arcpy.AddMessage("Location: " + dest_dir)
-        arcpy.AddMessage("")
-        arcpy.AddMessage("Flagged GDBs (full paths):")
-        for _, flagged_name in flagged_gdbs:
-            arcpy.AddMessage("  " + os.path.join(dest_dir, flagged_name))
-        arcpy.AddMessage("-" * 60)
 
     # Copy with overwrite explicitly disabled so any residual name collision raises
     # loudly rather than silently replacing data. Restore the prior value afterward so
@@ -518,21 +407,17 @@ def copy_reports_to_email_folder(qa_report_txt_path, topology_report_path, email
 # Main entry point
 # ---------------------------------------------------------------------------
 
-def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
+def run(update_dir, in_dataset, master_dataset, email_folder):
     """Orchestrate the full check-in workflow.
 
     Parameters
     ----------
-    update_dir       : str  Full path to the UpdateWorkArea\\<Type> directory.
-    in_dataset       : str  Full catalog path to the feature class being checked in.
-    master_dataset   : str  Full catalog path to the master/replica reference FC.
-    email_folder     : str  Full path to the existing UpdateEmail folder for this
-                            request (its basename is reused as the destination
-                            subfolder name).
-    dest_current_dir : str  Full path to the destination CurrentUpdate folder
-                            (where the Returned FGDB will be copied). Supplied
-                            explicitly by the caller so sandbox / production
-                            destinations are never confused.
+    update_dir     : str  Full path to the UpdateWorkArea\\<Type> directory.
+    in_dataset     : str  Full catalog path to the feature class being checked in.
+    master_dataset : str  Full catalog path to the master/replica reference FC.
+    email_folder   : str  Full path to the existing UpdateEmail folder for this
+                          request (its basename is reused as the destination
+                          subfolder name).
 
     Flow
     ----
@@ -547,11 +432,10 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     arcpy.AddMessage("")
     arcpy.AddMessage("*" * 60)
     arcpy.AddMessage("CHECK-IN DATASET WORKFLOW")
-    arcpy.AddMessage("Update directory      : " + update_dir)
-    arcpy.AddMessage("Input FC              : " + in_dataset)
-    arcpy.AddMessage("Master FC             : " + master_dataset)
-    arcpy.AddMessage("Update Email dir      : " + email_folder)
-    arcpy.AddMessage("Destination CurrentUp : " + dest_current_dir)
+    arcpy.AddMessage("Update directory : " + update_dir)
+    arcpy.AddMessage("Input FC         : " + in_dataset)
+    arcpy.AddMessage("Master FC        : " + master_dataset)
+    arcpy.AddMessage("Update Email dir : " + email_folder)
     arcpy.AddMessage("*" * 60)
 
     arcpy.SetProgressor("step", "Listing update directory files...", 0, 6, 1)
@@ -570,29 +454,11 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     arcpy.SetProgressorPosition()
     returned_gdb_path = checklist["returned_gdb"]
     if returned_gdb_path is None:
-        # Re-scan to distinguish "none" vs "more than one" for a clearer message.
-        try:
-            gdbs_found = [
-                e for e in os.listdir(update_dir)
-                if e.lower().endswith(".gdb")
-                and os.path.isdir(os.path.join(update_dir, e))
-            ]
-        except OSError:
-            gdbs_found = []
-
-        if len(gdbs_found) > 1:
-            arcpy.AddError(
-                "There is more than one GDB in the " + update_dir + " directory "
-                "(" + ", ".join(gdbs_found) + "). "
-                "Please copy any backups to a safe place or delete them. "
-                "Ensure there is only one gdb in the directory and then rerun this tool. "
-                "Aborting check-in."
-            )
-        else:
-            arcpy.AddError(
-                "No .gdb found in the update directory: " + update_dir + ". "
-                "Expected exactly one .gdb in this directory. Aborting check-in."
-            )
+        arcpy.AddError(
+            "No (or more than one) .gdb found in the update directory. "
+            "Expected exactly one .gdb in: " + update_dir + ". "
+            "Aborting check-in."
+        )
         return
 
     type_token = _derive_type_token(returned_gdb_path)
@@ -629,7 +495,7 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     # ------------------------------------------------------------------
     arcpy.SetProgressorLabel("Step 4 of 6: Reading topology report...")
     arcpy.SetProgressorPosition()
-    read_topology_report(checklist["topology_report"])
+    read_topology_report(update_dir)
 
     # ------------------------------------------------------------------
     # Step 5: Copy Returned FGDB
@@ -637,7 +503,7 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     arcpy.SetProgressorLabel("Step 5 of 6: Copying Returned FGDB...")
     arcpy.SetProgressorPosition()
     try:
-        copy_returned_fgdb(returned_gdb_path, dest_current_dir, type_token)
+        copy_returned_fgdb(returned_gdb_path, type_token)
     except Exception as exc:
         arcpy.AddError("FGDB copy failed: " + str(exc))
         return
@@ -660,60 +526,3 @@ def run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir):
     arcpy.AddMessage("*" * 60)
     arcpy.AddMessage("CHECK-IN COMPLETE.")
     arcpy.AddMessage("*" * 60)
-
-
-# ---------------------------------------------------------------------------
-# Standalone execution
-# ---------------------------------------------------------------------------
-
-if __name__ == "__main__":
-    # ------------------------------------------------------------------
-    # Standalone execution — two modes:
-    #
-    # TESTING (no arguments):
-    #   python check_in_dataset.py
-    #   Reads all five paths from the TEST_* keys in .env, including
-    #   TEST_CURRENT which becomes the destination CurrentUpdate folder.
-    #   This guarantees standalone test runs write to the sandbox, never
-    #   to production.
-    #
-    # EXPLICIT (five arguments):
-    #   python check_in_dataset.py \
-    #       <update_dir> <in_dataset> <master_dataset> \
-    #       <email_folder> <dest_current_dir>
-    #   Uses the supplied paths directly, ignoring TEST_* keys.
-    # ------------------------------------------------------------------
-    if len(sys.argv) == 1:
-        # Testing mode — load paths from .env TEST_* keys.
-        # NOTE: TEST_CURRENT / TEST_MASTER are folder paths in .env; run()
-        # expects feature class catalog paths for in_dataset / master_dataset.
-        # Adjust the two lines below if your test FCs live at a deeper path.
-        update_dir       = config_loader.TEST_UPDATEWORKAREA
-        in_dataset       = config_loader.TEST_CURRENT
-        master_dataset   = config_loader.TEST_MASTER
-        email_folder     = config_loader.TEST_EMAIL_FOLDER
-        dest_current_dir = config_loader.TEST_CURRENT
-        print("Standalone test mode — paths loaded from .env TEST_* keys:")
-        print("  update_dir      :", update_dir)
-        print("  in_dataset      :", in_dataset)
-        print("  master_dataset  :", master_dataset)
-        print("  email_folder    :", email_folder)
-        print("  dest_current_dir:", dest_current_dir)
-    elif len(sys.argv) == 6:
-        update_dir       = sys.argv[1]
-        in_dataset       = sys.argv[2]
-        master_dataset   = sys.argv[3]
-        email_folder     = sys.argv[4]
-        dest_current_dir = sys.argv[5]
-    else:
-        print(
-            "Usage:\n"
-            "  python check_in_dataset.py\n"
-            "      (no args — uses TEST_* paths from .env)\n"
-            "  python check_in_dataset.py"
-            " <update_dir> <in_dataset> <master_dataset>"
-            " <email_folder> <dest_current_dir>"
-        )
-        sys.exit(1)
-
-    run(update_dir, in_dataset, master_dataset, email_folder, dest_current_dir)
